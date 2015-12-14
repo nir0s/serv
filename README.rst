@@ -1,0 +1,1 @@
+For information on this package please refer to http://github.com/nir0s/ld
