@@ -20,6 +20,8 @@ class Base(object):
         self.description = params.get('description', 'no description given')
         self.user = params.get('user', 'root')
         self.group = params.get('group', 'root')
+        self.chdir = params.get('chdir', '/')
+        self.chroot = params.get('chroot', '/')
 
         self.services = dict(
             init_system=self.init_sys,
@@ -53,12 +55,12 @@ class Base(object):
 
     def generate_file_from_template(self, template, destination, params,
                                     overwrite=False):
-        self.lgr.debug('Generating {0}...'.format(template))
         templates = pkgutil.get_data(__name__, os.path.join(
             'templates', template))
 
         pretty_params = json.dumps(params, indent=4, sort_keys=True)
-        self.lgr.debug('Rendering with params: {0}...'.format(pretty_params))
+        self.lgr.debug('Rendering {0} with params: {1}...'.format(
+            template, pretty_params))
         generated = jinja2.Environment().from_string(templates).render(params)
 
         dirname = os.path.dirname(destination)

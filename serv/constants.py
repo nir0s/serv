@@ -8,6 +8,7 @@ SYSTEMD_SVC_PATH = '/lib/systemd/system'
 SYSTEMD_ENV_PATH = '/etc/sysconfig'
 UPSTART_SCRIPT_PATH = '/etc/init'
 SYSV_SCRIPT_PATH = '/etc/init.d'
+SYSV_ENV_PATH = '/etc/default'
 
 DIST_TO_INITSYS = {
     'centos': {
