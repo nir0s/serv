@@ -23,6 +23,7 @@ class Base(object):
         self.chdir = params.get('chdir', '/')
         self.chroot = params.get('chroot', '/')
 
+        # only relevant when retrieving status.
         self.services = dict(
             init_system=self.init_sys,
             init_system_version=self.init_sys_ver,
@@ -32,29 +33,62 @@ class Base(object):
         # only relevant when creating a service
         if self.cmd:
             if not find_executable(self.cmd):
-                self.lgr.error('Executable {0} could not be found.')
+                self.lgr.error('Executable {0} could not be found.'.format(
+                    self.cmd))
                 sys.exit()
 
     def generate(self, overwrite):
+        """Generates service files.
+        """
         raise NotImplementedError('Must be implemented by a subclass')
 
     def install(self):
+        """Installs a service.
+
+        This is relevant for init systems like systemd where you have to
+        `sudo systemctl enable #SERVICE#` before starting a service.
+        """
         raise NotImplementedError('Must be implemented by a subclass')
 
     def start(self):
+        """Starts a service.
+        """
         raise NotImplementedError('Must be implemented by a subclass')
 
     def stop(self):
+        """Stops a service.
+        """
         raise NotImplementedError('Must be implemented by a subclass')
 
     def uninstall(self):
+        """Uninstalls a service.
+
+        This should include any cleanups required.
+        """
         raise NotImplementedError('Must be implemented by a subclass')
 
     def status(self, name=''):
+        """Retrieves the status of a service `name` or all services
+        for the current init system.
+        """
         raise NotImplementedError('Must be implemented by a subclass')
 
     def generate_file_from_template(self, template, destination, params,
                                     overwrite=False):
+        """Generates a file from a Jinja2 `template` and writes it to
+        `destination` using `params`.
+
+        `overwrite` allows to overwrite existing files.
+
+        This used used by the different init implementations to generate
+        init scripts/configs and deploy them to the relevant directories.
+        Templates are looked up under init/templates/`template`.
+
+        If the `destination` dir doesn't exist, it will be created.
+        While it may seem a bit weird, not all relevant directories exist
+        out of the box. For instance, `/etc/sysconfig` doesn't necessarily
+        exist even if systemd is used by default.
+        """
         templates = pkgutil.get_data(__name__, os.path.join(
             'templates', template))
 
@@ -65,6 +99,8 @@ class Base(object):
 
         dirname = os.path.dirname(destination)
         if not os.path.isdir(dirname):
+            self.lgr.debug('Creating destination directory: {0}...'.format(
+                dirname))
             os.makedirs(dirname)
 
         self.lgr.debug('Writing generated file to {0}...'.format(destination))

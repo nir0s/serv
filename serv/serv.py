@@ -36,8 +36,26 @@ class Serv(object):
             lgr.debug('Autodetected init system version: {0}'.format(
                 self.init_sys_ver))
 
-    @staticmethod
-    def _find_init_systems(init_system):
+        # params to be used when manipulating a service.
+        # this is updated in each scenario.
+        self.params = dict(
+            init_sys=self.init_sys, init_sys_ver=self.init_sys_ver)
+
+        # a class object which can be instantiated to control
+        # a service.
+        # this is instantiated with the relevant parameters (self.params)
+        # in each scenario.
+        self.implementation = self._find_init_systems()
+
+    def _find_init_systems(self):
+        """Returns an init system implementation based on the
+        manual mapping or automated lookup.
+
+        All implementations must be loaded within `init/__init__.py`.
+        The implementations are retrieved by looking at all subclasses
+        of `Base`. If an implementation is found which matches the
+        requested init system, it is returned, else, `None` is returned.
+        """
         init_systems = []
 
         def get_impl(impl):
@@ -50,12 +68,13 @@ class Serv(object):
         lgr.debug('Finding init system implementations...')
         get_impl(Base)
         for system in init_systems:
-            if system.__name__.lower() == init_system:
+            if system.__name__.lower() == self.init_sys:
                 return system
-        lgr.error('Could not find init system.')
-        sys.exit()
+        return None
 
     def _parse_env_vars(self, env_vars):
+        """Returns a dict based on `key=value` pair strings.
+        """
         env = {}
         for var in env_vars:
             key, value = var.split('=')
@@ -87,9 +106,7 @@ class Serv(object):
         If `start` is True, it will also start the service.
         """
         name = name or self._set_name(cmd)
-        params = dict(
-            init_sys=self.init_sys,
-            init_sys_ver=self.init_sys_ver,
+        self.params.update(dict(
             cmd=cmd,
             name=name,
             args=args,
@@ -99,15 +116,16 @@ class Serv(object):
             env=self._parse_env_vars(env),
             chdir='/',
             chroot='/',
-        )
-        init_system = self._find_init_systems(self.init_sys)
-        s = init_system(lgr=lgr, **params)
+        ))
+        self._verify_implementation_found()
+        service = self.implementation(lgr=lgr, **self.params)
+
         lgr.info('Creating {0} Service: {1}...'.format(self.init_sys, name))
-        files = s.generate(overwrite=overwrite)
-        s.install()
+        files = service.generate(overwrite=overwrite)
+        service.install()
         if start:
             lgr.info('Starting Service: {0}'.format(name))
-            s.start()
+            service.start()
         lgr.info('Service created.')
         return files
 
@@ -119,31 +137,30 @@ class Serv(object):
         For instance, for upstart, it will `stop <name` and then
         delete /etc/init/<name>.conf.
         """
-        params = dict(
-            init_sys=self.init_sys,
-            init_sys_ver=self.init_sys_ver,
-            name=name
-        )
+        self.params.update(dict(name=name))
+        self._verify_implementation_found()
+        service = self.implementation(lgr=lgr, **self.params)
 
         lgr.info('Removing Service: {0}...'.format(name))
-        init_system = self._find_init_systems(self.init_sys)
-        s = init_system(lgr=lgr, **params)
-        s.stop()
-        s.uninstall()
+        service.stop()
+        service.uninstall()
         lgr.info('Service removed.')
 
     def status(self, name=''):
         """Returns a list containing a single service's info if `name`
         is supplied, else returns a list of all services' info.
         """
-        params = dict(
-            init_sys=self.init_sys,
-            init_sys_ver=self.init_sys_ver,
-            name=name
-        )
+        self.params.update(dict(name=name))
+        self._verify_implementation_found()
+        service = self.implementation(lgr=lgr, **self.params)
+
         lgr.info('Retrieving Status...'.format(name))
-        init_system = self._find_init_systems(self.init_sys)
-        return init_system(lgr=lgr, **params).status(name)
+        return service.status(name)
+
+    def _verify_implementation_found(self):
+        if not self.implementation:
+            lgr.error('No init system implementation could be found.')
+            sys.exit()
 
     def lookup(self):
         """Returns the relevant init system and its version.
@@ -289,7 +306,7 @@ def remove(name, init_system, verbose):
               help='Init system to use.')
 @click.option('-v', '--verbose', default=False, is_flag=True)
 def status(name, init_system, verbose):
-    """Creates a service
+    """Retrieves a service's status.
     """
     logger.configure()
     status = Serv(init_system, verbose).status(name)

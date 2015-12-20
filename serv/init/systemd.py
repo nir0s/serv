@@ -30,6 +30,8 @@ class SystemD(Base):
             sys.exit()
 
         self.lgr.debug('Generating Service files.')
+
+        # TODO: these should be standardized across all implementations.
         svc_file_tmplt = '{0}_{1}.service.j2'.format(
             self.init_sys, self.init_sys_ver)
         env_file_tmplt = '{0}_{1}.env.j2'.format(
@@ -57,6 +59,8 @@ class SystemD(Base):
         except sh.ErrorReturnCode_5:
             self.lgr.debug('Service not running.')
 
+    # TODO: this should be a decorator under base.py to allow
+    # cleanup on failed creation.
     def uninstall(self):
         self.lgr.debug('Removing SystemD Service.')
         sh.systemctl.disable(self.name)

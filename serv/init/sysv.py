@@ -31,7 +31,6 @@ class SysV(Base):
             self.init_sys, self.init_sys_ver)
         self.generate_file_from_template(
             svc_file_tmplt, self.svc_file_dest, self.params, overwrite)
-        os.chmod(self.svc_file_dest, 755)
         self.generate_file_from_template(
             env_file_tmplt, self.env_file_dest, self.params, overwrite)
 
@@ -42,7 +41,7 @@ class SysV(Base):
 
     def install(self):
         """Enables the service"""
-        pass
+        os.chmod(self.svc_file_dest, 755)
 
     def start(self):
         """Starts the service"""
