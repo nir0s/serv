@@ -54,6 +54,8 @@ pip install https://github.com/nir0s/serv/archive/master.tar.gz
 sudo serv create /usr/bin/python2 --name MySimpleHTTPServer --args '-m SimpleHTTPServer' --var KEY1=VALUE1 --var KEY2=VALUE2 --start -v
 ```
 
+If name is omitted, the name of the service (and therefore, the names of the files) will be deduced from the executable's name.
+
 ### Removing a daemon
 
 ```shell
