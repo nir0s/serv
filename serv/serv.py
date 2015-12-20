@@ -268,8 +268,10 @@ def main():
 
 
 @click.command()
-@click.option('-c', '--cmd', required=True,
-              help='Absolute or in $PATH command to run.')
+@click.argument('cmd', required=True)
+@click.option('-n', '--name',
+              help='Name of service to create. If omitted, will be deducated '
+              'from the name of the executable.')
 @click.option('--init-system', required=False,
               type=click.Choice(Serv().implementations),
               help='Init system to use.')
@@ -286,18 +288,25 @@ def main():
 @click.option('-s', '--start', default=False, is_flag=True,
               help='Start the service after creating it.')
 @click.option('-v', '--verbose', default=False, is_flag=True)
-def create(cmd, init_system, init_system_version, args, var, overwrite, start,
-           verbose):
+# TODO: should probably pass **params here instead and pass them directly to
+# Serv().create() as we have system specific parameters which will be passed
+# here.
+def create(cmd, name, init_system, init_system_version, args, var, overwrite,
+           start, verbose):
     """Creates (and maybe runs) a service.
     """
     logger.configure()
     Serv(init_system, init_system_version, verbose).create(
-        cmd=cmd, args=args, env=var, overwrite=overwrite, start=start)
+        cmd=cmd,
+        name=name,
+        args=args,
+        env=var,
+        overwrite=overwrite,
+        start=start)
 
 
 @click.command()
-@click.option('-n', '--name',
-              help='Name of service to remove.')
+@click.argument('name')
 @click.option('--init-system', required=False,
               type=click.Choice(Serv().implementations),
               help='Init system to use.')
@@ -310,9 +319,7 @@ def remove(name, init_system, verbose):
 
 
 @click.command()
-@click.option('-n', '--name', required=False,
-              help='Name of service to get status for. If omitted, will '
-                   'returns the status for all services.')
+@click.argument('name', required=False)
 @click.option('--init-system', required=False,
               type=click.Choice(Serv().implementations),
               help='Init system to use.')

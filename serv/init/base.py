@@ -16,12 +16,6 @@ class Base(object):
         self.init_sys_ver = params.get('init_sys_ver')
         self.cmd = params.get('cmd')
         self.name = params.get('name')
-        self.args = params.get('args', '')
-        self.description = params.get('description', 'no description given')
-        self.user = params.get('user', 'root')
-        self.group = params.get('group', 'root')
-        self.chdir = params.get('chdir', '/')
-        self.chroot = params.get('chroot', '/')
 
         # only relevant when retrieving status.
         self.services = dict(

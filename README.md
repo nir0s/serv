@@ -51,19 +51,19 @@ pip install https://github.com/nir0s/serv/archive/master.tar.gz
 ### Creating a daemon
 
 ```shell
-sudo serv create --name MySimpleHTTPServer --cmd /usr/bin/python2 --args '-m SimpleHTTPServer' --var KEY1=VALUE1 --var KEY2=VALUE2 --start -v
+sudo serv create /usr/bin/python2 --name MySimpleHTTPServer --args '-m SimpleHTTPServer' --var KEY1=VALUE1 --var KEY2=VALUE2 --start -v
 ```
 
 ### Removing a daemon
 
 ```shell
-sudo serv remove --name MySimpleHTTPServer
+sudo serv remove MySimpleHTTPServer
 ```
 
 ### Retrieving a daemon's status
 
 ```shell
-sudo serv status --name MySimpleHTTPServer
+sudo serv status MySimpleHTTPServer
 ```
 
 or for all services
