@@ -18,6 +18,10 @@ class SystemD(Base):
 
     def generate(self, overwrite=False):
         """Generates a service and env vars file for a systemd service.
+
+        Note that env var names will be capitalized using Jinja.
+        Even though a param might be named `key` and have value `value`,
+        it will be rendered as `KEY=value`.
         """
         if not self.cmd.startswith('/'):
             self.lgr.error('SystemD requires the full path to the executable. '

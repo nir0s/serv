@@ -15,6 +15,8 @@ from .init.base import Base
 
 lgr = logger.init()
 
+SUPPORTED_SYSTEMS = ['sysv', 'systemd', 'upstart']
+
 
 class Serv(object):
     def __init__(self, init_system=None, init_system_version=None,
@@ -41,13 +43,26 @@ class Serv(object):
         self.params = dict(
             init_sys=self.init_sys, init_sys_ver=self.init_sys_ver)
 
+        imps = self._find_all_implementations()
+        # lowercase names of all implementations (e.g. [sysv, systemd])
+        self.implementations = \
+            [i.__name__.lower() for i in imps if i.__name__.lower() != 'base']
+
+        if self.init_sys not in self.implementations:
+            lgr.error('init system {0} not supported'.format(self.init_sys))
+            sys.exit()
         # a class object which can be instantiated to control
         # a service.
         # this is instantiated with the relevant parameters (self.params)
         # in each scenario.
-        self.implementation = self._find_init_systems()
+        self.implementation = self._get_init_system(imps)
 
-    def _find_init_systems(self):
+    def _get_init_system(self, init_systems):
+        for system in init_systems:
+            if system.__name__.lower() == self.init_sys:
+                return system
+
+    def _find_all_implementations(self):
         """Returns an init system implementation based on the
         manual mapping or automated lookup.
 
@@ -67,18 +82,15 @@ class Serv(object):
 
         lgr.debug('Finding init system implementations...')
         get_impl(Base)
-        for system in init_systems:
-            if system.__name__.lower() == self.init_sys:
-                return system
-        return None
+        return init_systems
 
     def _parse_env_vars(self, env_vars):
         """Returns a dict based on `key=value` pair strings.
         """
         env = {}
         for var in env_vars:
-            key, value = var.split('=')
-            env.update(dict(key=value))
+            k, v = var.split('=')
+            env.update({k: v})
         return env
 
     def _set_name(self, cmd):
@@ -259,7 +271,7 @@ def main():
 @click.option('-c', '--cmd', required=True,
               help='Absolute or in $PATH command to run.')
 @click.option('--init-system', required=False,
-              type=click.Choice(['upstart', 'systemd', 'sysv']),
+              type=click.Choice(Serv().implementations),
               help='Init system to use.')
 @click.option('--init-system-version', required=False, default='default',
               type=click.Choice(['lsb-3.1', '1.5', 'default']),
@@ -287,7 +299,7 @@ def create(cmd, init_system, init_system_version, args, var, overwrite, start,
 @click.option('-n', '--name',
               help='Name of service to remove.')
 @click.option('--init-system', required=False,
-              type=click.Choice(['upstart', 'systemd', 'sysv']),
+              type=click.Choice(Serv().implementations),
               help='Init system to use.')
 @click.option('-v', '--verbose', default=False, is_flag=True)
 def remove(name, init_system, verbose):
@@ -302,7 +314,7 @@ def remove(name, init_system, verbose):
               help='Name of service to get status for. If omitted, will '
                    'returns the status for all services.')
 @click.option('--init-system', required=False,
-              type=click.Choice(['upstart', 'systemd', 'sysv']),
+              type=click.Choice(Serv().implementations),
               help='Init system to use.')
 @click.option('-v', '--verbose', default=False, is_flag=True)
 def status(name, init_system, verbose):

@@ -23,13 +23,13 @@ NOTE: Serv requires sudo permissions! (you can't write to /etc/init.d, /lib/syst
 
 ### Supported Init Systems
 
-systemd and upstart are mostly supported now.
+systemd, Upstart and SysV are mostly supported now.
 
 I intend to add:
 
-* sysv
 * runit
 * supervisord
+* nssm for Windows.
 * Whichever other system that's giving you (or me) a headache.
 
 Note: On Linux, Serv uses [ld](http://github.com/nir0s/ld) to identify the distribution.
@@ -51,7 +51,7 @@ pip install https://github.com/nir0s/serv/archive/master.tar.gz
 ### Creating a daemon
 
 ```shell
-sudo serv create --name MySimpleHTTPServer --cmd /usr/bin/python2 --args '-m SimpleHTTPServer' --env '{"VAR1":"VAL1", "VAR2":"VAL2"}' --start -v
+sudo serv create --name MySimpleHTTPServer --cmd /usr/bin/python2 --args '-m SimpleHTTPServer' --var KEY1=VALUE1 --var KEY2=VALUE2 --start -v
 ```
 
 ### Removing a daemon
