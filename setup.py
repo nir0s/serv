@@ -30,7 +30,8 @@ setup(
             'init/templates/sysv_default.j2',
             'init/templates/sysv_default.default.j2',
             'init/templates/sysv_lsb-3.1.j2',
-            'init/templates/supervisor_default.conf.j2'
+            'init/templates/supervisor_default.conf.j2',
+            'init/binaries/nssm.exe'
         ]
     },
     entry_points={

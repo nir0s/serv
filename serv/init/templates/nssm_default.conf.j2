@@ -1,0 +1,29 @@
+@echo off
+
+echo Installing {{ name }} as a windows service...
+
+{{ nssm_path }} install {{ name }} {{ cmd }} {{ args }}
+
+if %errorlevel% neq 0 exit /b %errorlevel%
+
+echo Setting service environment
+
+{{ nssm_path }} set {{ name }} AppEnvironmentExtra ^
+{% for var, value in env.items() %}{% filter upper %}{{ var }}{% endfilter %}={{ value }} ^
+{% endfor %}
+
+if %errorlevel% neq 0 exit /b %errorlevel%
+
+echo Configuring startup policy...
+
+sc config {{ name }} start= {{ startup_policy }}
+
+if %errorlevel% neq 0 exit /b %errorlevel%
+
+echo Configuring failure policy...
+
+sc failure {{ name }} reset= {{ failure_reset_timeout }} actions= restart/{{ failure_restart_delay }}
+
+if %errorlevel% neq 0 exit /b %errorlevel%
+
+echo {{ name }} configured successfully as a Windows Service
