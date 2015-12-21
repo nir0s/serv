@@ -2,46 +2,25 @@ description     "{{ description }}"
 start on filesystem or runlevel [2345]
 stop on runlevel [!2345]
 
-{#respawn
-umask {{{umask}}}
-{{#nice}}
-nice {{{nice}}}
-{{/nice}}
-{{#chroot}}
-chroot {{{chroot}}}
-{{#chroot}}
-chdir {{{chdir}}}
-{{#limit_coredump}}
-limit core {{{limit_coredump}}} {{{limit_coredump}}}
-{{/limit_coredump}}
-{{#limit_cputime}}
-limit cpu {{{limit_cputime}}} {{{limit_cputime}}}
-{{/limit_cputime}}
-{{#limit_data}}
-limit data {{{limit_data}}} {{{limit_data}}}
-{{/limit_data}}
-{{#limit_file_size}}
-limit fsize {{{limit_file_size}}} {{{limit_file_size}}}
-{{/limit_file_size}}
-{{#limit_locked_memory}}
-limit memlock {{{limit_locked_memory}}} {{{limit_locked_memory}}}
-{{/limit_locked_memory}}
+respawn{% if umask %}
+umask {{ umask }}{% endif %}{% if nice %}
+nice {{ nice }}{% endif %}{% if chroot %}
+chroot {{ chroot }}{% endif %}{% if chdir %}
+chdir {{ chdir }}{% endif %}{% if limit_coredump %}
+limit core {{ limit_coredump }} {{ limit_coredump }}{% endif %}{% if limit_cputime %}
+limit cpu {{ limit_cputime }} {{ limit_cputime }}{% endif %}{% if limit_data %}
+limit data {{ limit_data }} {{ limit_data }}{% endif %}{% if limit_file_size %}
+limit fsize {{ limit_file_size }} {{ limit_file_size }}{% endif %}{% if limit_locked_memory %}
+limit memlock {{ limit_locked_memory }} {{ limit_locked_memory }}{% endif %}
 #limit msgqueue <softlimit> <hardlimit>
-#limit nice <softlimit> <hardlimit>
-{{#limit_open_files}}
-limit nofile {{{limit_open_files}}} {{{limit_open_files}}}
-{{/limit_open_files}}
-{{#limit_user_processes}}
-limit nproc {{{limit_user_processes}}} {{{limit_user_processes}}}
-{{/limit_user_processes}}
-{{#limit_physical_memory}}
-limit rss {{{limit_physical_memory}}} {{{limit_physical_memory}}}
-{{#limit_physical_memory}}
+#limit chroot <softlimit> <hardlimit>{% if limit_open_files %}
+limit nofile {{ limit_open_files }} {{ limit_open_files }}{% endif %}{% if limit_user_processes %}
+limit nproc {{ limit_user_processes }} {{ limit_user_processes }}{% endif %}{% if limit_physical_memory %}
+limit rss {{ limit_physical_memory }} {{ limit_physical_memory }}{% endif %}
 #limit rtprio <softlimit> <hardlimit>
-#limit sigpending <softlimit> <hardlimit>
-{{#limit_stack_size}}
-limit stack {{{limit_stack_size}}} {{{limit_stack_size}}}
-{{/limit_stack_size}} #}
+#limit sigpending <softlimit> <hardlimit>{% if limit_stack_size %}
+limit stack {{ limit_stack_size }} {{ limit_stack_size }}{% endif %}
+
 setuid {{ user }}
 setgid {{ group }}
 console log # log stdout/stderr to /var/log/upstart/

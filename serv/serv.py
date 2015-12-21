@@ -107,10 +107,7 @@ class Serv(object):
                  'name according to executable: {0}'.format(name))
         return name
 
-    def create(self, cmd, name='', args='',
-               description='no description given',
-               user='root', group='root', env=None, overwrite=False,
-               start=True):
+    def generate(self, cmd, name='', overwrite=False, start=True, **params):
         """Creates a service and returns the files generated to support it.
 
         It will generate configuration file(s) for the service and
@@ -118,17 +115,12 @@ class Serv(object):
         If `start` is True, it will also start the service.
         """
         name = name or self._set_name(cmd)
+        self.params.update(**params)
         self.params.update(dict(
             cmd=cmd,
             name=name,
-            args=args,
-            description=description,
-            user=user,
-            group=group,
-            env=self._parse_env_vars(env),
-            chdir='/',
-            chroot='/',
-        ))
+            env=self._parse_env_vars(params.get('var', '')))
+        )
         self._verify_implementation_found()
         service = self.implementation(lgr=lgr, **self.params)
 
@@ -267,42 +259,78 @@ def main():
     pass
 
 
-@click.command()
+@click.command(context_settings=dict(ignore_unknown_options=True))
 @click.argument('cmd', required=True)
 @click.option('-n', '--name',
               help='Name of service to create. If omitted, will be deducated '
               'from the name of the executable.')
+@click.option('-d', '--description', default='no description given',
+              help='Service\'s description string.')
+@click.option('-s', '--start', default=False, is_flag=True,
+              help='Start the service after creating it.')
 @click.option('--init-system', required=False,
               type=click.Choice(Serv().implementations),
               help='Init system to use.')
 @click.option('--init-system-version', required=False, default='default',
               type=click.Choice(['lsb-3.1', '1.5', 'default']),
               help='Init system version to use.')
+@click.option('--overwrite', default=False, is_flag=True,
+              help='Whether to overwrite the service if it already exists.')
 @click.option('-a', '--args', required=False,
               help='Arguments to pass to the command.')
 @click.option('-e', '--var', required=False, multiple=True,
               help='Environment variables to pass to the command. '
                    'Format: var=value. You can do this multiple times.')
-@click.option('--overwrite', default=False, is_flag=True,
-              help='Whether to overwrite the service if it already exists.')
-@click.option('-s', '--start', default=False, is_flag=True,
-              help='Start the service after creating it.')
+@click.option('-u', '--user', required=False, default='root',
+              help='User to execute `cmd` with. [Default: root]')
+@click.option('-g', '--group', required=False, default='root',
+              help='Group for `user`. [Default: root].')
+@click.option('--chroot', required=False, default='/',
+              help='chroot dir to use. [Default: /]')
+@click.option('--chdir', required=False, default='/',
+              help='Directory to change to before executing `cmd`. '
+              '[Default: /]')
+@click.option('--nice', required=False, type=click.IntRange(-20, 19),
+              help='process\'s `niceness` level. [-20 >< 19]')
+# TODO: add validation that valid umask.
+@click.option('--umask', required=False, type=int,
+              help='process\'s `niceness` level. [e.g. 755]')
+@click.option('--limit-coredump', required=False, default='',
+              help='process\'s `limit-coredump` level. '
+              '[`ulimited` || > 0 ]')
+@click.option('--limit-cputime', required=False, default='',
+              help='process\'s `limit-cputime` level. '
+              '[`ulimited` || > 0 ]')
+@click.option('--limit-data', required=False, default='',
+              help='process\'s `limit-data` level. '
+              '[`ulimited` || > 0 ]')
+@click.option('--limit-file_size', required=False, default='',
+              help='process\'s `limit-file-size` level. '
+              '[`ulimited` || > 0 ]')
+@click.option('--limit-locked-memory', required=False, default='',
+              help='process\'s `limit-locked-memory` level. '
+              '[`ulimited` || > 0 ]')
+@click.option('--limit-open-files', required=False, default='',
+              help='process\'s `limit-open-files` level. '
+              '[`ulimited` || > 0 ]')
+@click.option('--limit-user-processes', required=False, default='',
+              help='process\'s `limit-user-processes` level. '
+              '[`ulimited` || > 0 ]')
+@click.option('--limit-physical-memory', required=False, default='',
+              help='process\'s `limit-physical-memory` level. '
+              '[`ulimited` || > 0 ]')
+@click.option('--limit-stack-size', required=False, default='',
+              help='process\'s `limit-stack-size` level. '
+              '[`ulimited` || > 0 ]')
 @click.option('-v', '--verbose', default=False, is_flag=True)
-# TODO: should probably pass **params here instead and pass them directly to
-# Serv().create() as we have system specific parameters which will be passed
-# here.
-def create(cmd, name, init_system, init_system_version, args, var, overwrite,
-           start, verbose):
+@click.argument('extra', nargs=-1, type=click.UNPROCESSED)
+def generate(cmd, name, init_system, init_system_version, overwrite,
+             start, verbose, **params):
     """Creates (and maybe runs) a service.
     """
     logger.configure()
-    Serv(init_system, init_system_version, verbose).create(
-        cmd=cmd,
-        name=name,
-        args=args,
-        env=var,
-        overwrite=overwrite,
-        start=start)
+    Serv(init_system, init_system_version, verbose).generate(
+        cmd=cmd, name=name, overwrite=overwrite, start=start, **params)
 
 
 @click.command()
@@ -326,12 +354,19 @@ def remove(name, init_system, verbose):
 @click.option('-v', '--verbose', default=False, is_flag=True)
 def status(name, init_system, verbose):
     """Retrieves a service's status.
+
+    If `init-system` is omitted,
+    a service named `name` will be looked for under the
+    automatically identified init system.
+
+    If `name` is omitted, a status of all services will be
+    retrieved.
     """
     logger.configure()
     status = Serv(init_system, verbose).status(name)
     print(json.dumps(status, indent=4, sort_keys=True))
 
 
-main.add_command(create)
+main.add_command(generate)
 main.add_command(remove)
 main.add_command(status)

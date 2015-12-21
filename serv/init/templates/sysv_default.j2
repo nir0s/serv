@@ -51,14 +51,16 @@ start() {
     # If prestart fails, abort start.
     prestart || return $?
   fi
-  {{/prestart}}
+  {{/prestart}} #}
   # Setup any environmental stuff beforehand
-  {{{ulimit_shell}}} #}
-  # Run the program!
-  {# {{#nice}}nice -n "$nice" \{{/nice}} #}
+  {% if ulimits %}ulimit {{ ulimits }}{% endif %}
+  # Run the program!{% if nice %}
+  nice -n "$nice" \{% endif %}
   chroot --userspec "$user":"$group" "$chroot" sh -c "
+    {% if ulimits %}ulimit {{ ulimits }}{% endif %}
     cd \"$chdir\"
     exec \"$program\" $args" &
+  # TODO: dunno if we want this.
   {# " >> {{{ sysv_log_path }}}.stdout 2>> {{{ sysv_log }}}.stderr #}
   # Generate the pidfile from here. If we instead made the forked process
   # generate it there will be a race condition between the pidfile writing

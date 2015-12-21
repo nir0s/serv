@@ -19,6 +19,8 @@ class SysV(Base):
     def generate(self, overwrite=False):
         """Generates a service and env vars file for a SysV service.
         """
+        self.set_system_specific_params()
+
         if not os.path.isfile(self.cmd):
             self.lgr.error('The executable {0} does not exist.'.format(
                 self.cmd))
@@ -34,10 +36,34 @@ class SysV(Base):
         self.generate_file_from_template(
             env_file_tmplt, self.env_file_dest, self.params, overwrite)
 
+    # TODO: figure out if to depracate.
     def set_system_specific_params(self):
-        return {
-            'sysv_log_path': '/var/log',
-        }
+        self.params.update({
+            'sysv_log_dir': '/var/log',
+            'sysv_log_path': '/var/log/{0}'.format(self.name)
+        })
+        ulimits = []
+        p = self.params
+        if p.get('limit_coredump'):
+            ulimits.append('-d {0}'.format(p['limit_coredump']))
+        if p.get('limit_cputime'):
+            ulimits.append('-t {0}'.format(p['limit_cputime']))
+        if p.get('limit_data'):
+            ulimits.append('-d {0}'.format(p['limit_data']))
+        if p.get('limit_file_size'):
+            ulimits.append('-f {0}'.format(p['limit_file_size']))
+        if p.get('limit_locked_memory'):
+            ulimits.append('-l {0}'.format(p['limit_locked_memory']))
+        if p.get('limit_open_files'):
+            ulimits.append('-n {0}'.format(p['limit_open_files']))
+        if p.get('limit_user_processes'):
+            ulimits.append('-u {0}'.format(p['limit_user_processes']))
+        if p.get('limit_physical_memory'):
+            ulimits.append('-m {0}'.format(p['limit_physical_memory']))
+        if p.get('limit_stack_size'):
+            ulimits.append('-s {0}'.format(p['limit_stack_size']))
+        if ulimits:
+            self.params['ulimits'] = ' '.join(ulimits)
 
     def install(self):
         """Enables the service"""

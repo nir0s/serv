@@ -16,7 +16,7 @@ class Base(object):
         self.init_sys_ver = params.get('init_sys_ver')
         self.cmd = params.get('cmd')
         self.name = params.get('name')
-
+        self._set_default_parameters()
         # only relevant when retrieving status.
         self.services = dict(
             init_system=self.init_sys,
@@ -30,6 +30,44 @@ class Base(object):
                 self.lgr.error('Executable {0} could not be found.'.format(
                     self.cmd))
                 sys.exit()
+
+        self._validate_init_system_params()
+
+    def _set_default_parameters(self):
+        p = self.params
+        p['description'] = p.get('description', 'no description given')
+        p['chdir'] = p.get('chdir', '/')
+        p['chroot'] = p.get('chroot', '/')
+        p['user'] = p.get('user', 'root')
+        p['group'] = p.get('group', 'root')
+
+    def _validate_init_system_params(self):
+        niceness = self.params.get('nice')
+        if niceness in self.params and (niceness < -20 or niceness > 19):
+            self.lgr.error('`niceness` level must be between -20 and 19.')
+            sys.exit()
+
+        if 0 == 1:
+            limit_params = [
+                'limit_coredump',
+                'limit_cputime',
+                'limit_data',
+                'limit_file_size',
+                'limit_locked_memory',
+                'limit_open_files',
+                'limit_user_processes',
+                'limit_physical_memory',
+                'limit_stack_size',
+            ]
+            limits = [self.params.get(l) for l in limit_params]
+            for l in limit_params:
+                if l in self.params and int(self.params.get(l, '')) < 1:
+                    self.lgr.error('All limits must be greater than 0.')
+                    sys.exit()
+
+            if not any(limits):
+                self.lgr.error('All limits must be greater than 0.')
+                self.exit()
 
     def generate(self, overwrite):
         """Generates service files.
