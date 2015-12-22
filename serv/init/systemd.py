@@ -57,10 +57,11 @@ class SystemD(Base):
             self.svc_file_path, self.svc_file_dest))
         self.create_system_directory_for_file(self.svc_file_dest)
         shutil.move(self.svc_file_path, self.svc_file_dest)
-        self.lgr.debug('Deploying {0} to {1}...'.format(
-            self.env_file_path, self.env_file_dest))
-        self.create_system_directory_for_file(self.env_file_dest)
-        shutil.move(self.env_file_path, self.env_file_dest)
+        if self.params.get('env'):
+            self.lgr.debug('Deploying {0} to {1}...'.format(
+                self.env_file_path, self.env_file_dest))
+            self.create_system_directory_for_file(self.env_file_dest)
+            shutil.move(self.env_file_path, self.env_file_dest)
 
         sh.systemctl.enable(self.name)
 
