@@ -25,7 +25,7 @@ def _get_package_data():
 
 setup(
     name='Serv',
-    version="0.0.5",
+    version="0.0.6",
     url='https://github.com/nir0s/serv',
     author='nir0s',
     author_email='nir36g@gmail.com',
