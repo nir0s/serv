@@ -51,13 +51,16 @@ sudo pip install https://github.com/nir0s/serv/archive/master.tar.gz
 ### Creating a daemon
 
 ```shell
-$ sudo serv generate /usr/bin/python2 --name MySimpleHTTPServer --args '-m SimpleHTTPServer' --var KEY1=VALUE1 --var KEY2=VALUE2 --start -v
+$ sudo serv generate /usr/bin/python2 --name MySimpleHTTPServer --args '-m SimpleHTTPServer' --var KEY1=VALUE1 --var KEY2=VALUE2 --start
 ...
 
 INFO - Creating systemd Service: MySimpleHTTPServer...
 INFO - Starting Service: MySimpleHTTPServer
 INFO - Service created.
 ...
+
+$ ss -lntp | grep 8000
+LISTEN     0      5            *:8000                     *:*
 
 ```
 
@@ -103,6 +106,7 @@ INFO - Removing Service: SimpleHTTPServer...
 INFO - Service removed.
 ...
 
+$ ss -lntp | grep 8000
 ```
 
 
