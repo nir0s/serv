@@ -1,5 +1,6 @@
 import os
 import sys
+import shutil
 
 import sh
 
@@ -23,15 +24,8 @@ class SystemD(Base):
         Even though a param might be named `key` and have value `value`,
         it will be rendered as `KEY=value`.
         """
-        if not self.cmd.startswith('/'):
-            self.lgr.error('SystemD requires the full path to the executable. '
-                           'Instead, you provided: {0}'.format(self.cmd))
-            sys.exit()
-
-        if not os.path.isfile(self.cmd):
-            self.lgr.error('The executable {0} does not exist.'.format(
-                self.cmd))
-            sys.exit()
+        super(SystemD, self).generate(overwrite=overwrite)
+        self._validate_init_system_params()
 
         self.lgr.debug('Generating Service files.')
 
@@ -40,24 +34,41 @@ class SystemD(Base):
             self.init_sys, self.init_sys_ver)
         env_file_tmplt = '{0}_{1}.env.j2'.format(
             self.init_sys, self.init_sys_ver)
+
+        self.svc_file_path = os.path.join(self.tmp, self.name + '.service')
+        self.env_file_path = os.path.join(self.tmp, self.name)
+
+        files = [self.svc_file_path]
+
         self.generate_file_from_template(
-            svc_file_tmplt, self.svc_file_dest, self.params, overwrite)
+            svc_file_tmplt, self.svc_file_path, self.params, overwrite)
         if self.params.get('env'):
             self.generate_file_from_template(
-                env_file_tmplt, self.env_file_dest, self.params, overwrite)
+                env_file_tmplt, self.env_file_path, self.params, overwrite)
+            files.append(self.env_file_path)
+
+        return files
 
     def install(self):
         """Enables the service"""
-        self.lgr.debug('Enabling SystemD Service.')
+        super(SystemD, self).install()
+
+        self.lgr.debug('Deploying {0} to {1}...'.format(
+            self.svc_file_path, self.svc_file_dest))
+        self.create_system_directory_for_file(self.svc_file_dest)
+        shutil.move(self.svc_file_path, self.svc_file_dest)
+        self.lgr.debug('Deploying {0} to {1}...'.format(
+            self.env_file_path, self.env_file_dest))
+        self.create_system_directory_for_file(self.env_file_dest)
+        shutil.move(self.env_file_path, self.env_file_dest)
+
         sh.systemctl.enable(self.name)
 
     def start(self):
         """Starts the service"""
-        self.lgr.debug('Starting SystemD Service.')
         sh.systemctl.start(self.name)
 
     def stop(self):
-        self.lgr.debug('Stopping SystemD Service.')
         try:
             sh.systemctl.stop(self.name)
         except sh.ErrorReturnCode_5:
@@ -96,3 +107,9 @@ class SystemD(Base):
             sub=svc_info[3],
             description=svc_info[4]
         )
+
+    def _validate_init_system_specific_params(self):
+        if not self.cmd.startswith('/'):
+            self.lgr.error('SystemD requires the full path to the executable. '
+                           'Instead, you provided: {0}'.format(self.cmd))
+            sys.exit()

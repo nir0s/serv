@@ -9,7 +9,9 @@ SYSTEMD_ENV_PATH = '/etc/sysconfig'
 UPSTART_SCRIPT_PATH = '/etc/init'
 SYSV_SCRIPT_PATH = '/etc/init.d'
 SYSV_ENV_PATH = '/etc/default'
-NSSM_SCRIPT_PATH = 'c:\\nssm'
+NSSM_BINARY_LOCATION = '/etc/nssm'
+NSSM_SCRIPT_PATH = '/etc/nssm'
+# NSSM_SCRIPT_PATH = 'c:\\nssm'
 
 DIST_TO_INITSYS = {
     'centos': {

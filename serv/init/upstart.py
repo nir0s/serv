@@ -1,4 +1,5 @@
 import os
+import shutil
 
 import sh
 
@@ -16,14 +17,29 @@ class Upstart(Base):
     def generate(self, overwrite=False):
         """Generates a config file for an upstart service.
         """
+        super(Upstart, self).generate(overwrite=overwrite)
+
+        self.lgr.debug('Generating Service files.')
         svc_file_tmplt = '{0}_{1}.conf.j2'.format(
             self.init_sys, self.init_sys_ver)
+
+        self.svc_file_path = os.path.join(self.tmp, self.name)
+
+        files = [self.svc_file_path]
+
         self.generate_file_from_template(
-            svc_file_tmplt, self.svc_file_dest, self.params, overwrite)
+            svc_file_tmplt, self.svc_file_path, self.params, overwrite)
+
+        return files
 
     def install(self):
         """Enables the service"""
-        pass
+        super(Upstart, self).install()
+
+        self.lgr.debug('Deploying {0} to {1}...'.format(
+            self.svc_file_path, self.svc_file_dest))
+        self.create_system_directory_for_file(self.svc_file_dest)
+        shutil.move(self.svc_file_path, self.svc_file_dest)
 
     def start(self):
         """Starts the service"""

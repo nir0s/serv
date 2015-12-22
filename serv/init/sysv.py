@@ -1,5 +1,6 @@
 import os
 import sys
+import shutil
 
 import sh
 
@@ -19,59 +20,44 @@ class SysV(Base):
     def generate(self, overwrite=False):
         """Generates a service and env vars file for a SysV service.
         """
-        self.set_system_specific_params()
-
-        if not os.path.isfile(self.cmd):
-            self.lgr.error('The executable {0} does not exist.'.format(
-                self.cmd))
-            sys.exit()
+        super(SysV, self).generate(overwrite=overwrite)
+        self._set_system_specific_params()
 
         self.lgr.debug('Generating Service files.')
         svc_file_tmplt = '{0}_{1}.j2'.format(
             self.init_sys, self.init_sys_ver)
         env_file_tmplt = '{0}_{1}.default.j2'.format(
             self.init_sys, self.init_sys_ver)
-        self.generate_file_from_template(
-            svc_file_tmplt, self.svc_file_dest, self.params, overwrite)
-        self.generate_file_from_template(
-            env_file_tmplt, self.env_file_dest, self.params, overwrite)
 
-    # TODO: figure out if to depracate.
-    def set_system_specific_params(self):
-        self.params.update({
-            'sysv_log_dir': '/var/log',
-            'sysv_log_path': '/var/log/{0}'.format(self.name)
-        })
-        ulimits = []
-        p = self.params
-        if p.get('limit_coredump'):
-            ulimits.append('-d {0}'.format(p['limit_coredump']))
-        if p.get('limit_cputime'):
-            ulimits.append('-t {0}'.format(p['limit_cputime']))
-        if p.get('limit_data'):
-            ulimits.append('-d {0}'.format(p['limit_data']))
-        if p.get('limit_file_size'):
-            ulimits.append('-f {0}'.format(p['limit_file_size']))
-        if p.get('limit_locked_memory'):
-            ulimits.append('-l {0}'.format(p['limit_locked_memory']))
-        if p.get('limit_open_files'):
-            ulimits.append('-n {0}'.format(p['limit_open_files']))
-        if p.get('limit_user_processes'):
-            ulimits.append('-u {0}'.format(p['limit_user_processes']))
-        if p.get('limit_physical_memory'):
-            ulimits.append('-m {0}'.format(p['limit_physical_memory']))
-        if p.get('limit_stack_size'):
-            ulimits.append('-s {0}'.format(p['limit_stack_size']))
-        if ulimits:
-            self.params['ulimits'] = ' '.join(ulimits)
+        self.svc_file_path = os.path.join(self.tmp, self.name)
+        self.env_file_path = os.path.join(self.tmp, self.name + '.defaults')
+
+        files = [self.svc_file_path, self.env_file_path]
+
+        self.generate_file_from_template(
+            svc_file_tmplt, self.svc_file_path, self.params, overwrite)
+        self.generate_file_from_template(
+            env_file_tmplt, self.env_file_path, self.params, overwrite)
+
+        return files
 
     def install(self):
         """Enables the service"""
+        super(SysV, self).install()
+
+        self.lgr.debug('Deploying {0} to {1}...'.format(
+            self.svc_file_path, self.svc_file_dest))
+        self.create_system_directory_for_file(self.svc_file_dest)
+        shutil.move(self.svc_file_path, self.svc_file_dest)
+        self.lgr.debug('Deploying {0} to {1}...'.format(
+            self.env_file_path, self.env_file_dest))
+        self.create_system_directory_for_file(self.env_file_dest)
+        shutil.move(self.env_file_path, self.env_file_dest)
+
         os.chmod(self.svc_file_dest, 755)
 
     def start(self):
         """Starts the service"""
-        self.lgr.debug('Starting SysV Service.')
         try:
             sh.service(self.name, 'start')
         except sh.CommandNotFound:
@@ -86,7 +72,6 @@ class SysV(Base):
                 sys.exit()
 
     def stop(self):
-        self.lgr.debug('Stopping SysV Service.')
         try:
             sh.service(self.name, 'stop')
         except sh.CommandNotFound:
@@ -100,7 +85,6 @@ class SysV(Base):
                 sys.exit()
 
     def uninstall(self):
-        self.lgr.debug('Removing SysV Service.')
         if os.path.isfile(self.svc_file_dest):
             os.remove(self.svc_file_dest)
         if os.path.isfile(self.env_file_dest):
@@ -143,3 +127,32 @@ class SysV(Base):
             status=status,
             pid=pid
         )
+
+    # TODO: figure out if to depracate.
+    def _set_system_specific_params(self):
+        self.params.update({
+            'sysv_log_dir': '/var/log',
+            'sysv_log_path': '/var/log/{0}'.format(self.name)
+        })
+        ulimits = []
+        p = self.params
+        if p.get('limit_coredump'):
+            ulimits.append('-d {0}'.format(p['limit_coredump']))
+        if p.get('limit_cputime'):
+            ulimits.append('-t {0}'.format(p['limit_cputime']))
+        if p.get('limit_data'):
+            ulimits.append('-d {0}'.format(p['limit_data']))
+        if p.get('limit_file_size'):
+            ulimits.append('-f {0}'.format(p['limit_file_size']))
+        if p.get('limit_locked_memory'):
+            ulimits.append('-l {0}'.format(p['limit_locked_memory']))
+        if p.get('limit_open_files'):
+            ulimits.append('-n {0}'.format(p['limit_open_files']))
+        if p.get('limit_user_processes'):
+            ulimits.append('-u {0}'.format(p['limit_user_processes']))
+        if p.get('limit_physical_memory'):
+            ulimits.append('-m {0}'.format(p['limit_physical_memory']))
+        if p.get('limit_stack_size'):
+            ulimits.append('-s {0}'.format(p['limit_stack_size']))
+        if ulimits:
+            self.params['ulimits'] = ' '.join(ulimits)

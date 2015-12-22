@@ -10,30 +10,31 @@ def read(*parts):
     return codecs.open(os.path.join(here, *parts), 'r').read()
 
 
+def _get_package_data():
+    """Iterates over the `init` dir for directories and returns
+    all files within them.
+
+    Only files within `binaries` and `templates` will be added.
+    """
+    from os.path import join as j
+    from os import listdir as ld
+    x = 'init'
+    b = j('serv', x)
+    dr = ['binaries', 'templates']
+    return [j(x, d, f) for d in ld(b) if d in dr for f in ld(j(b, d))]
+
 setup(
     name='Serv',
-    version="0.0.3",
+    version="0.0.5",
     url='https://github.com/nir0s/serv',
     author='nir0s',
     author_email='nir36g@gmail.com',
     license='LICENSE',
     platforms='All',
-    description='Init systems abstraction API and CLI.',
+    description='Init system abstraction API and CLI.',
     long_description=read('README.rst'),
     packages=find_packages(exclude=[]),
-    package_data={
-        'serv': [
-            'init/templates/systemd_default.env.j2',
-            'init/templates/systemd_default.service.j2',
-            'init/templates/upstart_1.5.conf.j2',
-            'init/templates/upstart_default.conf.j2',
-            'init/templates/sysv_default.j2',
-            'init/templates/sysv_default.default.j2',
-            'init/templates/sysv_lsb-3.1.j2',
-            'init/templates/supervisor_default.conf.j2',
-            'init/binaries/nssm.exe'
-        ]
-    },
+    package_data={'serv': _get_package_data()},
     entry_points={
         'console_scripts': [
             'serv = serv.serv:main',

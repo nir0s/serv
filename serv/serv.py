@@ -107,30 +107,46 @@ class Serv(object):
                  'name according to executable: {0}'.format(name))
         return name
 
-    def generate(self, cmd, name='', overwrite=False, start=True, **params):
-        """Creates a service and returns the files generated to support it.
+    def generate(self, cmd, name='', overwrite=False, deploy=False,
+                 start=False, **params):
+        """Generates service files and returns a list of the generated files.
 
         It will generate configuration file(s) for the service and
-        deploy them.
-        If `start` is True, it will also start the service.
+        deploy them to the tmp dir on your os.
+
+        If `deploy` is True, the service will be configured to run on the
+        current machine.
+        If `start` is True, the service will be started as well.
         """
+        if start and not deploy:
+            lgr.error('Cannot start a service without deploying it.')
+            sys.exit()
+
         name = name or self._set_name(cmd)
         self.params.update(**params)
+        # TODO: parsing env vars should probably be under `base.py`.
         self.params.update(dict(
             cmd=cmd,
             name=name,
             env=self._parse_env_vars(params.get('var', '')))
         )
         self._verify_implementation_found()
-        service = self.implementation(lgr=lgr, **self.params)
+        self.service = self.implementation(lgr=lgr, **self.params)
 
-        lgr.info('Creating {0} Service: {1}...'.format(self.init_sys, name))
-        files = service.generate(overwrite=overwrite)
-        service.install()
-        if start:
-            lgr.info('Starting Service: {0}'.format(name))
-            service.start()
-        lgr.info('Service created.')
+        lgr.info('Generating files for {0}...'.format(self.init_sys, name))
+        files = self.service.generate(overwrite=overwrite)
+        for f in files:
+            lgr.info('Generated {0}'.format(f))
+
+        if deploy:
+            lgr.info('Deploying {0} service {1}...'.format(
+                self.init_sys, name))
+            self.service.install()
+            if start:
+                lgr.info('Starting {0} service {1}...'.format(
+                    self.init_sys, name))
+                self.service.start()
+            lgr.info('Service created.')
         return files
 
     def remove(self, name):
@@ -145,7 +161,7 @@ class Serv(object):
         self._verify_implementation_found()
         service = self.implementation(lgr=lgr, **self.params)
 
-        lgr.info('Removing Service: {0}...'.format(name))
+        lgr.info('Removing {0} service {1}...'.format(self.init_sys, name))
         service.stop()
         service.uninstall()
         lgr.info('Service removed.')
@@ -158,7 +174,7 @@ class Serv(object):
         self._verify_implementation_found()
         service = self.implementation(lgr=lgr, **self.params)
 
-        lgr.info('Retrieving Status...'.format(name))
+        lgr.info('Retrieving status...'.format(name))
         return service.status(name)
 
     def _verify_implementation_found(self):
@@ -264,16 +280,20 @@ def main():
 @click.option('-n', '--name',
               help='Name of service to create. If omitted, will be deducated '
               'from the name of the executable.')
-@click.option('-d', '--description', default='no description given',
+@click.option('--description', default='no description given',
               help='Service\'s description string.')
+@click.option('-d', '--deploy', default=False, is_flag=True,
+              help='Deploy the service on the current machine.')
 @click.option('-s', '--start', default=False, is_flag=True,
-              help='Start the service after creating it.')
+              help='Start the service after deploying it.')
 @click.option('--init-system', required=False,
               type=click.Choice(Serv().implementations),
-              help='Init system to use.')
+              help='Init system to use. (If omitted, will attempt to '
+              'automatically identify it.)')
 @click.option('--init-system-version', required=False, default='default',
               type=click.Choice(['lsb-3.1', '1.5', 'default']),
-              help='Init system version to use.')
+              help='Init system version to use. (If omitted, will attempt to '
+              'automatically identify it.)')
 @click.option('--overwrite', default=False, is_flag=True,
               help='Whether to overwrite the service if it already exists.')
 @click.option('-a', '--args', required=False,
@@ -325,12 +345,12 @@ def main():
 @click.option('-v', '--verbose', default=False, is_flag=True)
 @click.argument('extra', nargs=-1, type=click.UNPROCESSED)
 def generate(cmd, name, init_system, init_system_version, overwrite,
-             start, verbose, **params):
+             deploy, start, verbose, **params):
     """Creates (and maybe runs) a service.
     """
     logger.configure()
     Serv(init_system, init_system_version, verbose).generate(
-        cmd=cmd, name=name, overwrite=overwrite, start=start, **params)
+        cmd, name, overwrite, deploy, start, **params)
 
 
 @click.command()

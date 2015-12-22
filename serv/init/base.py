@@ -3,6 +3,7 @@ import os
 import json
 import sys
 from distutils.spawn import find_executable
+import tempfile
 
 import jinja2
 
@@ -24,13 +25,6 @@ class Base(object):
             services=[]
         )
 
-        # only relevant when creating a service
-        if self.cmd:
-            if not find_executable(self.cmd):
-                self.lgr.error('Executable {0} could not be found.'.format(
-                    self.cmd))
-                sys.exit()
-
         self._validate_init_system_params()
 
     def _set_default_parameters(self):
@@ -46,7 +40,7 @@ class Base(object):
         if niceness in self.params and (niceness < -20 or niceness > 19):
             self.lgr.error('`niceness` level must be between -20 and 19.')
             sys.exit()
-
+        # WIP!
         if 0 == 1:
             limit_params = [
                 'limit_coredump',
@@ -72,7 +66,7 @@ class Base(object):
     def generate(self, overwrite):
         """Generates service files.
         """
-        raise NotImplementedError('Must be implemented by a subclass')
+        self.tmp = tempfile.gettempdir()
 
     def install(self):
         """Installs a service.
@@ -80,7 +74,10 @@ class Base(object):
         This is relevant for init systems like systemd where you have to
         `sudo systemctl enable #SERVICE#` before starting a service.
         """
-        raise NotImplementedError('Must be implemented by a subclass')
+        if not find_executable(self.cmd):
+            self.lgr.error('Executable {0} could not be found.'.format(
+                self.cmd))
+            sys.exit()
 
     def start(self):
         """Starts a service.
@@ -129,12 +126,6 @@ class Base(object):
             template, pretty_params))
         generated = jinja2.Environment().from_string(templates).render(params)
 
-        dirname = os.path.dirname(destination)
-        if not os.path.isdir(dirname):
-            self.lgr.debug('Creating destination directory: {0}...'.format(
-                dirname))
-            os.makedirs(dirname)
-
         self.lgr.debug('Writing generated file to {0}...'.format(destination))
         if os.path.isfile(destination):
             if overwrite:
@@ -144,3 +135,10 @@ class Base(object):
                 sys.exit()
         with open(destination, 'w') as f:
             f.write(generated)
+
+    def create_system_directory_for_file(self, init_system_file):
+        dirname = os.path.dirname(init_system_file)
+        if not os.path.isdir(dirname):
+            self.lgr.debug('Creating destination directory: {0}...'.format(
+                dirname))
+            os.makedirs(dirname)

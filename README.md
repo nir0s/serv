@@ -12,9 +12,9 @@ The question that Serv tries to answer is: "Why the hell do I have to know init 
 
 ## Features
 
-* Abstracts away the platform (systemd, upstart, etc..) - Serv identifies it by itself.
-* Creates daemon configuration on different platforms so that you don't have to.
-* Allows to run services after generating the config.
+* Abstracts away the platform (systemd, upstart, etc..) - Serv identifies it by itself thought it can be explicitly provided.
+* Creates service configuration files on different platforms so that you don't have to.
+* Allows to deploy services after generating the config on the local machine.
 * Allows to stop and remove services.
 * Provides both an API and CLI for those purposes.
 * Provides an API for retrieving service related information.
@@ -24,12 +24,12 @@ NOTE: Serv requires sudo permissions! (you can't write to /etc/init.d, /lib/syst
 ### Supported Init Systems
 
 systemd, Upstart and SysV are mostly supported now though SysV doesn't yet support retrieving a service's `status`.
+nssm (Non-Sucking Service Manager for Windows) is currently being worked on.
 
 I intend to add:
 
 * runit
 * supervisord
-* nssm for Windows.
 * Whichever other system that's giving you (or me) a headache.
 
 Note: On Linux, Serv uses [ld](http://github.com/nir0s/ld) to identify the distribution.
@@ -51,12 +51,16 @@ sudo pip install https://github.com/nir0s/serv/archive/master.tar.gz
 ### Creating a daemon
 
 ```shell
-$ sudo serv generate /usr/bin/python2 --name MySimpleHTTPServer --args '-m SimpleHTTPServer' --var KEY1=VALUE1 --var KEY2=VALUE2 --start
+$ sudo serv generate /usr/bin/python2 --name MySimpleHTTPServer --args '-m SimpleHTTPServer' --var KEY1=VALUE1 --var KEY2=VALUE2 --deploy --start
 ...
 
-INFO - Creating systemd Service: MySimpleHTTPServer...
-INFO - Starting Service: MySimpleHTTPServer
+INFO - Generating files for MySimpleHTTPServer...
+INFO - Generated /tmp/MySimpleHTTPServer.service
+INFO - Generated /tmp/MySimpleHTTPServer
+INFO - Deploying systemd service MySimpleHTTPServer...
+INFO - Starting systemd service MySimpleHTTPServer...
 INFO - Service created.
+
 ...
 
 $ ss -lntp | grep 8000
