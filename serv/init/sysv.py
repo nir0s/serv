@@ -1,6 +1,5 @@
 import os
 import sys
-import shutil
 
 import sh
 
@@ -35,9 +34,9 @@ class SysV(Base):
         files = [self.svc_file_path, self.env_file_path]
 
         self.generate_file_from_template(
-            svc_file_tmplt, self.svc_file_path, self.params, overwrite)
+            svc_file_tmplt, self.svc_file_path)
         self.generate_file_from_template(
-            env_file_tmplt, self.env_file_path, self.params, overwrite)
+            env_file_tmplt, self.env_file_path)
 
         return files
 
@@ -45,14 +44,8 @@ class SysV(Base):
         """Enables the service"""
         super(SysV, self).install()
 
-        self.lgr.debug('Deploying {0} to {1}...'.format(
-            self.svc_file_path, self.svc_file_dest))
-        self.create_system_directory_for_file(self.svc_file_dest)
-        shutil.move(self.svc_file_path, self.svc_file_dest)
-        self.lgr.debug('Deploying {0} to {1}...'.format(
-            self.env_file_path, self.env_file_dest))
-        self.create_system_directory_for_file(self.env_file_dest)
-        shutil.move(self.env_file_path, self.env_file_dest)
+        self.deploy_service_file(self.svc_file_path, self.svc_file_dest)
+        self.deploy_service_file(self.env_file_path, self.env_file_dest)
 
         os.chmod(self.svc_file_dest, 755)
 
@@ -90,9 +83,6 @@ class SysV(Base):
         if os.path.isfile(self.env_file_dest):
             os.remove(self.env_file_dest)
 
-    def is_exist(self):
-        return True if os.path.isfile(self.svc_file_dest) else False
-
     def status(self, name=''):
         """WIP!"""
         raise NotImplementedError()
@@ -128,8 +118,18 @@ class SysV(Base):
             pid=pid
         )
 
-    # TODO: figure out if to depracate.
+    def is_system_exists(self):
+        # maybe a safer way would be to check if /etc/init.d is not empty.
+        return os.path.isdir('/etc/init.d')
+
+    def get_system_version(self):
+        return 'lsb-3.1'
+
+    def is_service_exists(self):
+        return os.path.isfile(self.svc_file_dest)
+
     def _set_system_specific_params(self):
+        # TODO: figure out if to depracate these two.
         self.params.update({
             'sysv_log_dir': '/var/log',
             'sysv_log_path': '/var/log/{0}'.format(self.name)

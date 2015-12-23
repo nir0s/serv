@@ -1,7 +1,8 @@
 import os
 import sys
 import logging
-import dictconfig
+
+from . import dictconfig
 
 DEFAULT_BASE_LOGGING_LEVEL = logging.INFO
 DEFAULT_VERBOSE_LOGGING_LEVEL = logging.DEBUG

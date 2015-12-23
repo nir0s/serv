@@ -18,3 +18,7 @@ limit_stack_size="{{ limit_stack_size }}"{% endif %}
 # not exited within a reasonable time, SIGKILL will be sent next.
 # The default behavior is to simply log a message "program stop failed; still running"
 KILL_ON_STOP_TIMEOUT=0
+
+# These will be exported for the process to use (may be empty beneath this if no vars are provided)
+{% for var, value in env.items() %}{% filter upper %}export {{ var }}{% endfilter %}={{ value }}
+{% endfor %}

@@ -48,18 +48,23 @@ sudo pip install https://github.com/nir0s/serv/archive/master.tar.gz
 
 ## Usage
 
-### Creating a daemon
+Before using, please read the caveats section!
+
+### Creating a service
 
 ```shell
 $ sudo serv generate /usr/bin/python2 --name MySimpleHTTPServer --args '-m SimpleHTTPServer' --var KEY1=VALUE1 --var KEY2=VALUE2 --deploy --start
 ...
 
-INFO - Generating files for MySimpleHTTPServer...
-INFO - Generated /tmp/MySimpleHTTPServer.service
-INFO - Generated /tmp/MySimpleHTTPServer
-INFO - Deploying systemd service MySimpleHTTPServer...
-INFO - Starting systemd service MySimpleHTTPServer...
+INFO - Generating files for systemd...
+INFO - Generated /tmp/SimpleHTTPServer.service
+INFO - Generated /tmp/SimpleHTTPServer
+INFO - Deploying systemd service SimpleHTTPServer...
+INFO - Deploying /tmp/SimpleHTTPServer.service to /lib/systemd/system/SimpleHTTPServer.service...
+INFO - Deploying /tmp/SimpleHTTPServer to /etc/sysconfig/SimpleHTTPServer...
+INFO - Starting systemd service SimpleHTTPServer...
 INFO - Service created.
+
 
 ...
 
@@ -70,7 +75,7 @@ LISTEN     0      5            *:8000                     *:*
 
 If name is omitted, the name of the service (and therefore, the names of the files) will be deduced from the executable's name.
 
-### Retrieving a daemon's status
+### Retrieving a service's status
 
 ```shell
 $ sudo serv status MySimpleHTTPServer
@@ -100,7 +105,7 @@ $ sudo serv status
 ...
 ```
 
-### Removing a daemon
+### Removing a service
 
 ```shell
 $ sudo serv remove MySimpleHTTPServer
@@ -130,6 +135,27 @@ Once an init-system matching an existing implementation (i.e supported by Serv) 
 
 * Init system identification is not robust. It relies on some assumptions (and as we all know, assumption is the mother of all fuckups). Some OS distributions have multiple init systems (Ubuntu 14.04 has Upstart, SysV and half (HALF!?) of systemd).
 * Stupidly enough, I have yet to standardize the status JSON returned and it is different for each init system.
+* Currently if anything fails during service creation, cleanup is not performed. This will be added in future versions.
+
+### Missing directories
+
+In some situations, directories related to the specific init system do not exist and should be created. For instance, even if systemd (`systemctl`) is available, `/etc/sysconfig` does not exist. IT IS UP TO THE USER to create those directories if they don't exist as Serv should not change the system on that level. The exception to the rule is with `nssm`, which will create the required dir (`c:\nssm`) for it to operate.
+
+Required dirs are:
+
+#### Systemd
+
+* `/lib/systemd/system`
+* `/etc/sysconfig` (required only if environment variables are provided.)
+
+#### SysV
+
+* `/etc/init.d`
+* `/etc/default`
+
+#### Upstart
+
+* `/etc/init`
 
 ## Testing
 

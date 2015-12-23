@@ -17,6 +17,11 @@ lgr = logger.init()
 
 SUPPORTED_SYSTEMS = ['sysv', 'systemd', 'upstart']
 
+PLATFORM = sys.platform
+IS_WIN = (os.name == 'nt')
+IS_DARWIN = (PLATFORM == 'darwin')
+IS_LINUX = (PLATFORM == 'linux2')
+
 
 class Serv(object):
     def __init__(self, init_system=None, init_system_version=None,
@@ -131,21 +136,25 @@ class Serv(object):
             env=self._parse_env_vars(params.get('var', '')))
         )
         self._verify_implementation_found()
-        self.service = self.implementation(lgr=lgr, **self.params)
+        self.init = self.implementation(lgr=lgr, **self.params)
 
         lgr.info('Generating files for {0}...'.format(self.init_sys, name))
-        files = self.service.generate(overwrite=overwrite)
+        files = self.init.generate(overwrite=overwrite)
         for f in files:
             lgr.info('Generated {0}'.format(f))
 
         if deploy:
+            if not self.init.is_system_exists():
+                lgr.error('Cannot start service. '
+                          '{0} is not installed.'.format(self.init_sys))
+                sys.exit()
             lgr.info('Deploying {0} service {1}...'.format(
                 self.init_sys, name))
-            self.service.install()
+            self.init.install()
             if start:
                 lgr.info('Starting {0} service {1}...'.format(
                     self.init_sys, name))
-                self.service.start()
+                self.init.start()
             lgr.info('Service created.')
         return files
 
@@ -159,11 +168,11 @@ class Serv(object):
         """
         self.params.update(dict(name=name))
         self._verify_implementation_found()
-        service = self.implementation(lgr=lgr, **self.params)
+        init = self.implementation(lgr=lgr, **self.params)
 
         lgr.info('Removing {0} service {1}...'.format(self.init_sys, name))
-        service.stop()
-        service.uninstall()
+        init.stop()
+        init.uninstall()
         lgr.info('Service removed.')
 
     def status(self, name=''):
@@ -172,10 +181,15 @@ class Serv(object):
         """
         self.params.update(dict(name=name))
         self._verify_implementation_found()
-        service = self.implementation(lgr=lgr, **self.params)
+        init = self.implementation(lgr=lgr, **self.params)
 
+        if name:
+            if not init.is_service_exists():
+                lgr.info('Service {0} does not seem to be installed'.format(
+                    name))
+                sys.exit()
         lgr.info('Retrieving status...'.format(name))
-        return service.status(name)
+        return init.status(name)
 
     def _verify_implementation_found(self):
         if not self.implementation:
@@ -219,14 +233,11 @@ class Serv(object):
         return None
 
     def _auto_lookup(self):
-        """Returns a tuple containing the init system's type and version
-        based on some systematic assumptions.
+        """Returns a list of tuples of available init systems on the
+        current machine.
 
         Note that in some situations (Ubuntu 14.04 for instance) more than
-        one init system can be found. In that case, we'll try to return
-        the most relevant one:
-
-        systemd first, upstart second, sysv third.
+        one init system can be found.
         """
         init_systems = []
         if os.path.isdir('/usr/lib/systemd'):

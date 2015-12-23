@@ -12,8 +12,46 @@ SYSV_ENV_PATH = '/etc/default'
 NSSM_BINARY_LOCATION = 'c:\\nssm'
 NSSM_SCRIPT_PATH = 'c:\\nssm'
 
+TEMPLATES = {
+    'systemd': {
+        'default': {
+            'systemd_default.service.j2': '/lib/systemd/system',
+            'systemd_default.env.j2': '/etc/sysconfig'
+        }
+    },
+    'sysv': {
+        'default': {
+            'sysv_default.default.j2': '/etc/default',
+            'sysv_default.j2': '/etc/init.d'
+        }
+    },
+    'upstart': {
+        'default': {
+            'upstart_default.conf.j2': '/etc/init'
+        },
+        '1.5': {
+            'upstart_1.5.conf.j2': '/etc/init'
+        }
+    },
+    'nssm': {
+        'default': {
+            'nssm_default.conf.j2': 'c:\\nssm'
+        }
+    }
+}
+
 DIST_TO_INITSYS = {
     'centos': {
+        '5': ('sysv', 'lsb-3.1'),
+        '6': ('upstart', '0.6.5'),
+        '7': ('systemd', 'default')
+    },
+    'redhat': {
+        '5': ('sysv', 'lsb-3.1'),
+        '6': ('upstart', '0.6.5'),
+        '7': ('systemd', 'default')
+    },
+    'rhel': {
         '5': ('sysv', 'lsb-3.1'),
         '6': ('upstart', '0.6.5'),
         '7': ('systemd', 'default')
@@ -38,7 +76,8 @@ DIST_TO_INITSYS = {
         '12': ('upstart', '1.5'),
         '13': ('upstart', '1.5'),
         '13': ('upstart', '1.5'),
-        '14': ('upstart', '1.5')
+        '14': ('upstart', '1.5'),
+        '15': ('systemd', 'default')
     },
     'arch': {
         'any': ('systemd', 'default')

@@ -4,6 +4,7 @@ import json
 import sys
 from distutils.spawn import find_executable
 import tempfile
+import shutil
 
 import jinja2
 
@@ -67,6 +68,8 @@ class Base(object):
         """Generates service files.
         """
         self.tmp = tempfile.gettempdir()
+        self.tempaltes = os.path.join(os.path.dirname(__file__), 'templates')
+        self.overwrite = overwrite
 
     def install(self):
         """Installs a service.
@@ -102,12 +105,24 @@ class Base(object):
         """
         raise NotImplementedError('Must be implemented by a subclass')
 
-    def generate_file_from_template(self, template, destination, params,
-                                    overwrite=False):
+    def is_system_exists(self):
+        """Returns True if the init system exists on the current machine
+        or False if it doesn't.
+        """
+        raise NotImplementedError('Must be implemented by a subclass')
+
+    def is_service_exists(self):
+        """Returns True if the service is installed on the current machine
+        and False if it isn't.
+        """
+        raise NotImplementedError('Must be implemented by a subclass')
+
+    def generate_file_from_template(self, template, destination):
         """Generates a file from a Jinja2 `template` and writes it to
         `destination` using `params`.
 
-        `overwrite` allows to overwrite existing files.
+        `overwrite` allows to overwrite existing files. It is passed to
+        the `generate` method.
 
         This used used by the different init implementations to generate
         init scripts/configs and deploy them to the relevant directories.
@@ -121,24 +136,40 @@ class Base(object):
         templates = pkgutil.get_data(__name__, os.path.join(
             'templates', template))
 
-        pretty_params = json.dumps(params, indent=4, sort_keys=True)
+        pretty_params = json.dumps(self.params, indent=4, sort_keys=True)
         self.lgr.debug('Rendering {0} with params: {1}...'.format(
             template, pretty_params))
-        generated = jinja2.Environment().from_string(templates).render(params)
+        generated = jinja2.Environment().from_string(
+            templates).render(self.params)
 
         self.lgr.debug('Writing generated file to {0}...'.format(destination))
+        self._should_overwrite(destination)
+        with open(destination, 'w') as f:
+            f.write(generated)
+
+    def _should_overwrite(self, destination):
         if os.path.isfile(destination):
-            if overwrite:
+            if self.overwrite:
                 self.lgr.debug('Overwriting: {0}'.format(destination))
             else:
                 self.lgr.error('File already exists: {0}'.format(destination))
                 sys.exit()
-        with open(destination, 'w') as f:
-            f.write(generated)
 
-    def create_system_directory_for_file(self, init_system_file):
+    def _handle_service_directory(self, init_system_file, create_directory):
         dirname = os.path.dirname(init_system_file)
         if not os.path.isdir(dirname):
-            self.lgr.debug('Creating destination directory: {0}...'.format(
-                dirname))
-            os.makedirs(dirname)
+            if create_directory:
+                self.lgr.debug('Creating directory {0}...'.format(dirname))
+                os.makedirs(dirname)
+            else:
+                self.lgr.error('Directory {0} does not exist and is required '
+                               'for {1}. Terminating...'.format(
+                                   dirname, init_system_file))
+                sys.exit()
+
+    def deploy_service_file(self, source, destination, create_directory=False):
+        self._should_overwrite(destination)
+        self.lgr.info('Deploying {0} to {1}...'.format(
+            source, destination))
+        self._handle_service_directory(destination, create_directory)
+        shutil.move(source, destination)

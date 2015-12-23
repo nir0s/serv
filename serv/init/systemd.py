@@ -1,6 +1,6 @@
 import os
 import sys
-import shutil
+import re
 
 import sh
 
@@ -10,6 +10,16 @@ from serv import constants as const
 
 class SystemD(Base):
     def __init__(self, lgr=None, **params):
+        """Sets the default parameters.
+
+        We're supering this as `Base` is setting up some basic
+        globallly required parameters. It's a must.
+
+        We check for `self.name` before we set the destination
+        paths for the service files as sometimes `self.name`
+        is not provided (for instance, when retrieving status
+        for all services under the init system.)
+        """
         super(SystemD, self).__init__(lgr=lgr, **params)
         if self.name:
             self.svc_file_dest = os.path.join(
@@ -18,11 +28,18 @@ class SystemD(Base):
                 const.SYSTEMD_ENV_PATH, self.name)
 
     def generate(self, overwrite=False):
-        """Generates a service and env vars file for a systemd service.
+        """Generates service files and returns a list of them.
 
-        Note that env var names will be capitalized using Jinja.
+        Note that env var names will be capitalized using a Jinja filter.
+        This is template dependent.
         Even though a param might be named `key` and have value `value`,
         it will be rendered as `KEY=value`.
+
+        We retrieve the names of the template files and see the paths
+        where the generated files will be deployed. These are files
+        a user can just take and use.
+        If the service is also installed, those files will be moved
+        to the relevant location on the system.
         """
         super(SystemD, self).generate(overwrite=overwrite)
         self._validate_init_system_params()
@@ -40,36 +57,38 @@ class SystemD(Base):
 
         files = [self.svc_file_path]
 
-        self.generate_file_from_template(
-            svc_file_tmplt, self.svc_file_path, self.params, overwrite)
+        self.generate_file_from_template(svc_file_tmplt, self.svc_file_path)
         if self.params.get('env'):
             self.generate_file_from_template(
-                env_file_tmplt, self.env_file_path, self.params, overwrite)
+                env_file_tmplt, self.env_file_path)
             files.append(self.env_file_path)
 
         return files
 
     def install(self):
-        """Enables the service"""
+        """Installs the service on the local machine
+
+        This is where we deploy the service files to their relevant
+        locations and perform any other required actions to configure
+        the service and make it ready to be `start`ed.
+        """
         super(SystemD, self).install()
 
-        self.lgr.debug('Deploying {0} to {1}...'.format(
-            self.svc_file_path, self.svc_file_dest))
-        self.create_system_directory_for_file(self.svc_file_dest)
-        shutil.move(self.svc_file_path, self.svc_file_dest)
+        self.deploy_service_file(self.svc_file_path, self.svc_file_dest)
         if self.params.get('env'):
-            self.lgr.debug('Deploying {0} to {1}...'.format(
-                self.env_file_path, self.env_file_dest))
-            self.create_system_directory_for_file(self.env_file_dest)
-            shutil.move(self.env_file_path, self.env_file_dest)
+            self.deploy_service_file(self.env_file_path, self.env_file_dest)
 
         sh.systemctl.enable(self.name)
+        sh.systemctl('daemon-reload')
 
     def start(self):
-        """Starts the service"""
+        """Starts the service.
+        """
         sh.systemctl.start(self.name)
 
     def stop(self):
+        """Stops the service.
+        """
         try:
             sh.systemctl.stop(self.name)
         except sh.ErrorReturnCode_5:
@@ -78,17 +97,28 @@ class SystemD(Base):
     # TODO: this should be a decorator under base.py to allow
     # cleanup on failed creation.
     def uninstall(self):
-        self.lgr.debug('Removing SystemD Service.')
+        """Uninstalls the service.
+
+        This is supposed to perform any cleanup operations required to
+        remove the service. Files, links, whatever else should be removed.
+        This method should also run when implementing cleanup in case of
+        failures.
+        """
         sh.systemctl.disable(self.name)
+        sh.systemctl('daemon-reload')
         if os.path.isfile(self.svc_file_dest):
             os.remove(self.svc_file_dest)
         if os.path.isfile(self.env_file_dest):
             os.remove(self.env_file_dest)
 
-    def is_exist(self):
-        return True if os.path.isfile(self.svc_file_dest) else False
-
     def status(self, name=''):
+        """Returns a list of the status(es) of the `name` service, or
+        if name is omitted, a list of the status of all services for this
+        specific init system.
+
+        There should be a standardization around the status fields.
+        There currently isn't.
+        """
         svc_list = sh.systemctl('--no-legend', '--no-pager', t='service')
         svcs_info = [self._parse_service_info(svc) for svc in svc_list]
         if name:
@@ -108,6 +138,30 @@ class SystemD(Base):
             sub=svc_info[3],
             description=svc_info[4]
         )
+
+    def is_system_exists(self):
+        """Returns True if the init system exists and False if not.
+        """
+        try:
+            sh.systemctl('--version')
+            return True
+        except:
+            return False
+
+    def get_system_version(self):
+        """Returns the init system's version if it exists.
+        """
+        try:
+            output = sh.systemctl('--version').split('\n')[0]
+        except:
+            return
+        version = re.search(r'(\d+)', str(output))
+        if version:
+            return str(version.group())
+        return ''
+
+    def is_service_exists(self):
+        return os.path.isfile(self.svc_file_dest)
 
     def _validate_init_system_specific_params(self):
         if not self.cmd.startswith('/'):

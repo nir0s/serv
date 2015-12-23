@@ -35,19 +35,15 @@ class Nssm(Base):
 
         files = [self.svc_file_path]
 
-        self.generate_file_from_template(
-            svc_file_tmplt, self.svc_file_path, self.params, overwrite)
+        self.generate_file_from_template(svc_file_tmplt, self.svc_file_path)
 
         return files
 
     def install(self):
         """Enables the service"""
         super(Nssm, self).install()
-
-        self.lgr.debug('Deploying {0} to {1}...'.format(
-            self.svc_file_path, self.svc_file_dest))
-        self.create_system_directory_for_file(self.svc_file_dest)
-        shutil.move(self.svc_file_path, self.svc_file_dest)
+        self.deploy_service_file(
+            self.svc_file_path, self.svc_file_dest, create_directory=True)
 
         self.nssm = \
             self.params.get('nssm_path') \
@@ -70,9 +66,6 @@ class Nssm(Base):
         if os.path.isfile(self.svc_file_dest):
             os.remove(self.svc_file_dest)
 
-    def is_exist(self):
-        return True if os.path.isfile(self.svc_file_dest) else False
-
     def status(self, name):
         result = subprocess.Popen('{0} status {1}'.format(
             self.nssm_path, self.name))
@@ -82,6 +75,16 @@ class Nssm(Base):
         self.services.update(
             {'services': [dict(name=self.name, status=state)]})
         return self.services
+
+    def is_system_exists(self):
+        """Returns True always since if it isn't installed, it will be.
+
+        See `self.install`
+        """
+        return True
+
+    def is_service_exists(self):
+        raise NotImplementedError()
 
     def _deploy_nssm_binary(self):
         # still not sure whether we should use this or
@@ -98,6 +101,7 @@ class Nssm(Base):
         return destination
 
     def _set_system_specific_params(self):
+        # should of course be configurable
         self.params.update({
             'startup_policy': 'auto',
             'failure_reset_timeout': 60,

@@ -1,6 +1,5 @@
 import os
-import shutil
-
+import re
 import sh
 
 from serv.init.base import Base
@@ -27,19 +26,14 @@ class Upstart(Base):
 
         files = [self.svc_file_path]
 
-        self.generate_file_from_template(
-            svc_file_tmplt, self.svc_file_path, self.params, overwrite)
+        self.generate_file_from_template(svc_file_tmplt, self.svc_file_path)
 
         return files
 
     def install(self):
         """Enables the service"""
         super(Upstart, self).install()
-
-        self.lgr.debug('Deploying {0} to {1}...'.format(
-            self.svc_file_path, self.svc_file_dest))
-        self.create_system_directory_for_file(self.svc_file_dest)
-        shutil.move(self.svc_file_path, self.svc_file_dest)
+        self.deploy_service_file(self.svc_file_path, self.svc_file_dest)
 
     def start(self):
         """Starts the service"""
@@ -49,10 +43,8 @@ class Upstart(Base):
         sh.stop(self.name)
 
     def uninstall(self):
-        os.remove(self.svc_file_dest)
-
-    def is_exist(self):
-        return True if os.path.isfile(self.svc_file_dest) else False
+        if os.path.isfile(self.svc_file_dest):
+            os.remove(self.svc_file_dest)
 
     def status(self, name=''):
         svc_list = sh.initctl.list()
@@ -78,3 +70,23 @@ class Upstart(Base):
             status=status,
             pid=pid
         )
+
+    def is_system_exists(self):
+        try:
+            sh.initctl.version()
+            return True
+        except:
+            return False
+
+    def get_system_version(self):
+        try:
+            output = sh.initctl.version()
+        except:
+            return
+        version = re.search(r'(\d+((.\d+)+)+?)', str(output))
+        if version:
+            return str(version.group())
+        return ''
+
+    def is_service_exists(self):
+        return os.path.isfile(self.svc_file_dest)
