@@ -23,8 +23,8 @@ NOTE: Serv requires sudo permissions! (you can't write to /etc/init.d, /lib/syst
 
 ### Supported Init Systems
 
-systemd, Upstart and SysV are mostly supported now though SysV doesn't yet support retrieving a service's `status`.
-nssm (Non-Sucking Service Manager for Windows) is currently being worked on.
+[systemd](http://www.freedesktop.org/wiki/Software/systemd/), [Upstart](http://upstart.ubuntu.com/) and [SysV](https://wiki.archlinux.org/index.php/SysVinit) are mostly supported now though SysV doesn't yet support retrieving a service's `status`.
+[nssm](https://nssm.cc/) (Non-Sucking Service Manager for Windows) is currently being worked on.
 
 I intend to add:
 
@@ -33,6 +33,11 @@ I intend to add:
 * Whichever other system that's giving you (or me) a headache.
 
 Note: On Linux, Serv uses [ld](http://github.com/nir0s/ld) to identify the distribution.
+
+## Compatibility
+
+Currently, tested on Python 2.6.x and 2.7.x
+Will be adding Python 3.x support soon enough.
 
 ## Installation
 
@@ -98,7 +103,7 @@ $ sudo serv status MySimpleHTTPServer
 ...
 ```
 
-or for all services
+or for all services of the same init system
 
 ```shell
 $ sudo serv status
@@ -121,21 +126,26 @@ $ ss -lntp | grep 8000
 
 ## Python API
 
+```python
 raise NotImplementedError()
+```
 
-Kidding.. it's there.. and requires documentation.
+Kidding.. it's there, it's easy and it and requires documentation.
 
-## How it works
+## How does it work
 
 Serv, unless explicitly specified by the user, looks up the the platform you're running on (Namely, linux distro and release) and deduces which init system is running on it by checking a static mapping table or an auto-lookup mechanism.
 
-Once an init-system matching an existing implementation (i.e supported by Serv) is found, Serv generates template files based on a set of parameters and deploys them to the relevant directories.
+Once an init-system matching an existing implementation (i.e supported by Serv) is found, Serv renders template files based on a set of parameters; (optionally) deploys them to the relevant directories and (optionally) starts the service.
 
-## Caveats
+Since Serv is aware of the init system being used, it also knows which files it needs to deploy and to where and which commands it needs to run.
+
+## Caveats and limitations
 
 * Init system identification is not robust. It relies on some assumptions (and as we all know, assumption is the mother of all fuckups). Some OS distributions have multiple init systems (Ubuntu 14.04 has Upstart, SysV and half (HALF!?) of systemd).
 * Stupidly enough, I have yet to standardize the status JSON returned and it is different for each init system.
 * Currently if anything fails during service creation, cleanup is not performed. This will be added in future versions.
+* Currently, all errors exit on the same error level. This will be changed soon.
 
 ### Missing directories
 

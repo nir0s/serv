@@ -42,9 +42,7 @@ class SystemD(Base):
         to the relevant location on the system.
         """
         super(SystemD, self).generate(overwrite=overwrite)
-        self._validate_init_system_params()
-
-        self.lgr.debug('Generating Service files.')
+        self._validate_init_system_specific_params()
 
         # TODO: these should be standardized across all implementations.
         svc_file_tmplt = '{0}_{1}.service.j2'.format(
@@ -73,7 +71,6 @@ class SystemD(Base):
         the service and make it ready to be `start`ed.
         """
         super(SystemD, self).install()
-
         self.deploy_service_file(self.svc_file_path, self.svc_file_dest)
         if self.params.get('env'):
             self.deploy_service_file(self.env_file_path, self.env_file_dest)
@@ -119,6 +116,7 @@ class SystemD(Base):
         There should be a standardization around the status fields.
         There currently isn't.
         """
+        super(SystemD, self).status(name=name)
         svc_list = sh.systemctl('--no-legend', '--no-pager', t='service')
         svcs_info = [self._parse_service_info(svc) for svc in svc_list]
         if name:
@@ -165,6 +163,6 @@ class SystemD(Base):
 
     def _validate_init_system_specific_params(self):
         if not self.cmd.startswith('/'):
-            self.lgr.error('SystemD requires the full path to the executable. '
+            self.lgr.error('Systemd requires the full path to the executable. '
                            'Instead, you provided: {0}'.format(self.cmd))
             sys.exit()

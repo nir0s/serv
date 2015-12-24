@@ -18,7 +18,6 @@ class Upstart(Base):
         """
         super(Upstart, self).generate(overwrite=overwrite)
 
-        self.lgr.debug('Generating Service files.')
         svc_file_tmplt = '{0}_{1}.conf.j2'.format(
             self.init_sys, self.init_sys_ver)
 
@@ -47,6 +46,8 @@ class Upstart(Base):
             os.remove(self.svc_file_dest)
 
     def status(self, name=''):
+        super(Upstart, self).status(name=name)
+
         svc_list = sh.initctl.list()
         svcs_info = [self._parse_service_info(svc) for svc in svc_list]
         if name:

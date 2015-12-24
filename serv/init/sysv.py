@@ -20,9 +20,8 @@ class SysV(Base):
         """Generates a service and env vars file for a SysV service.
         """
         super(SysV, self).generate(overwrite=overwrite)
-        self._set_system_specific_params()
+        self._set_init_system_specific_params()
 
-        self.lgr.debug('Generating Service files.')
         svc_file_tmplt = '{0}_{1}.j2'.format(
             self.init_sys, self.init_sys_ver)
         env_file_tmplt = '{0}_{1}.default.j2'.format(
@@ -87,6 +86,7 @@ class SysV(Base):
         """WIP!"""
         raise NotImplementedError()
 
+        super(SysV, self).status(name=name)
         try:
             sh.service(name, 'status')
         except sh.CommandNotFound:
@@ -128,7 +128,7 @@ class SysV(Base):
     def is_service_exists(self):
         return os.path.isfile(self.svc_file_dest)
 
-    def _set_system_specific_params(self):
+    def _set_init_system_specific_params(self):
         # TODO: figure out if to depracate these two.
         self.params.update({
             'sysv_log_dir': '/var/log',

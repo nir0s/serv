@@ -18,8 +18,7 @@ def _invoke_click(func, args=None, opts=None):
             opts_and_args.append(opt + value)
         else:
             opts_and_args.append(opt)
-
-    return clicktest.CliRunner().invoke(getattr(serv, func), opts_and_args)
+    clicktest.CliRunner().invoke(getattr(serv, func), opts_and_args)
 
 
 class TestServ(testtools.TestCase):
@@ -45,6 +44,7 @@ class TestServ(testtools.TestCase):
             '-d': None,
             '-s': None,
             '-v': None,
+            '--overwrite': None,
             '--init-system=': system
         }
 

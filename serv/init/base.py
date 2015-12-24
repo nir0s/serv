@@ -18,17 +18,11 @@ class Base(object):
         self.init_sys_ver = params.get('init_sys_ver')
         self.cmd = params.get('cmd')
         self.name = params.get('name')
-        self._set_default_parameters()
-        # only relevant when retrieving status.
-        self.services = dict(
-            init_system=self.init_sys,
-            init_system_version=self.init_sys_ver,
-            services=[]
-        )
+        self._set_default_parameter_values()
 
         self._validate_init_system_params()
 
-    def _set_default_parameters(self):
+    def _set_default_parameter_values(self):
         p = self.params
         p['description'] = p.get('description', 'no description given')
         p['chdir'] = p.get('chdir', '/')
@@ -72,7 +66,7 @@ class Base(object):
         self.overwrite = overwrite
 
     def install(self):
-        """Installs a service.
+        """Installs a service on the local machine.
 
         This is relevant for init systems like systemd where you have to
         `sudo systemctl enable #SERVICE#` before starting a service.
@@ -103,7 +97,11 @@ class Base(object):
         """Retrieves the status of a service `name` or all services
         for the current init system.
         """
-        raise NotImplementedError('Must be implemented by a subclass')
+        self.services = dict(
+            init_system=self.init_sys,
+            init_system_version=self.init_sys_ver,
+            services=[]
+        )
 
     def is_system_exists(self):
         """Returns True if the init system exists on the current machine
@@ -124,11 +122,14 @@ class Base(object):
         `overwrite` allows to overwrite existing files. It is passed to
         the `generate` method.
 
-        This used used by the different init implementations to generate
+        This is used by the different init implementations to generate
         init scripts/configs and deploy them to the relevant directories.
         Templates are looked up under init/templates/`template`.
 
-        If the `destination` dir doesn't exist, it will be created.
+        If the `destination` directory doesn't exist, it will alert
+        the user and exit. We don't want to be creating any system
+        related directories out of the blue. The exception to the rule is
+        with nssm.
         While it may seem a bit weird, not all relevant directories exist
         out of the box. For instance, `/etc/sysconfig` doesn't necessarily
         exist even if systemd is used by default.
@@ -141,7 +142,6 @@ class Base(object):
             template, pretty_params))
         generated = jinja2.Environment().from_string(
             templates).render(self.params)
-
         self.lgr.debug('Writing generated file to {0}...'.format(destination))
         self._should_overwrite(destination)
         with open(destination, 'w') as f:
@@ -169,7 +169,6 @@ class Base(object):
 
     def deploy_service_file(self, source, destination, create_directory=False):
         self._should_overwrite(destination)
-        self.lgr.info('Deploying {0} to {1}...'.format(
-            source, destination))
+        self.lgr.info('Deploying {0} to {1}...'.format(source, destination))
         self._handle_service_directory(destination, create_directory)
         shutil.move(source, destination)

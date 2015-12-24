@@ -142,7 +142,6 @@ class Serv(object):
         files = self.init.generate(overwrite=overwrite)
         for f in files:
             lgr.info('Generated {0}'.format(f))
-
         if deploy:
             if not self.init.is_system_exists():
                 lgr.error('Cannot start service. '

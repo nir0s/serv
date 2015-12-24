@@ -25,9 +25,8 @@ class Nssm(Base):
         it will be rendered as `KEY=value`.
         """
         super(Nssm, self).generate(overwrite=overwrite)
-        self._set_system_specific_params()
+        self._set_init_system_specific_params()
 
-        self.lgr.debug('Generating Service files.')
         svc_file_tmplt = '{0}_{1}.conf.j2'.format(
             self.init_sys, self.init_sys_ver)
 
@@ -67,6 +66,8 @@ class Nssm(Base):
             os.remove(self.svc_file_dest)
 
     def status(self, name):
+        super(Nssm, self).status(name=name)
+
         result = subprocess.Popen('{0} status {1}'.format(
             self.nssm_path, self.name))
         # apparently nssm output is encoded in utf16.
@@ -100,7 +101,7 @@ class Nssm(Base):
         shutil.copyfile(source, destination)
         return destination
 
-    def _set_system_specific_params(self):
+    def _set_init_system_specific_params(self):
         # should of course be configurable
         self.params.update({
             'startup_policy': 'auto',
