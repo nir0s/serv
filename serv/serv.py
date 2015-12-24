@@ -138,7 +138,8 @@ class Serv(object):
         self._verify_implementation_found()
         self.init = self.implementation(lgr=lgr, **self.params)
 
-        lgr.info('Generating files for {0}...'.format(self.init_sys, name))
+        lgr.info('Generating {0} files for service {1}...'.format(
+            self.init_sys, name))
         files = self.init.generate(overwrite=overwrite)
         for f in files:
             lgr.info('Generated {0}'.format(f))
