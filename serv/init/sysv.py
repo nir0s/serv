@@ -51,7 +51,7 @@ class SysV(Base):
     def start(self):
         """Starts the service"""
         try:
-            sh.service(self.name, 'start')
+            sh.service(self.name, 'start', _bg=True)
         except sh.CommandNotFound:
             # TODO: cleanup generated files if not found.
             self.lgr.warning('service command unavailable. Trying to run '
@@ -65,13 +65,13 @@ class SysV(Base):
 
     def stop(self):
         try:
-            sh.service(self.name, 'stop')
+            sh.service(self.name, 'stop', _bg=True)
         except sh.CommandNotFound:
             self.lgr.warning('service command unavailable. Trying to run '
                              'script directly.')
             try:
                 service = sh.Command('/etc/init.d/{0}'.format(self.name))
-                service.stop()
+                service.stop(_bg=True)
             except sh.CommandNotFound as ex:
                 self.lgr.error('Command not found: {0}'.format(str(ex)))
                 sys.exit()
