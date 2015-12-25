@@ -130,7 +130,7 @@ $ ss -lntp | grep 8000
 raise NotImplementedError()
 ```
 
-Kidding.. it's there, it's easy and it and requires documentation.
+Kidding.. it's there, it's easy and it requires documentation.
 
 ## How does it work
 
