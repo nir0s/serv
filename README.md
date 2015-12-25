@@ -186,4 +186,4 @@ Pull requests are always welcome to deal with specific distributions or just for
 * Implement a class named <init_system_name> (e.g. Runit). See [systemd](https://github.com/nir0s/serv/blob/master/serv/init/systemd.py) as a reference implementation.
 * Pass the `Base` class which contains some basic parameter declarations and provides a method for generating files from templates to your class (e.g. `from serv.init.base import Base`).
 * Add the relevant template files to serv/init/templates. The file names should be formatted as: `<init_system_name>_<init_system_version>.*.j2` (e.g. runit_default.j2).
-* In serv/init/__init__.py, import the class you implemented (e.g. `from serv.init.runit import Runit`).
+* In `serv/init/__init__.py`, import the class you implemented (e.g. `from serv.init.runit import Runit`).
