@@ -1,7 +1,9 @@
 import os
 import sys
 
-import sh
+from serv import utils
+if not utils.IS_WIN:
+    import sh
 
 from serv.init.base import Base
 from serv import constants as const
@@ -10,37 +12,27 @@ from serv import constants as const
 class SysV(Base):
     def __init__(self, lgr=None, **params):
         super(SysV, self).__init__(lgr=lgr, **params)
+
         if self.name:
             self.svc_file_dest = os.path.join(
-                const.SYSV_SCRIPT_PATH, self.name)
+                const.SYSV_SVC_PATH, self.name)
             self.env_file_dest = os.path.join(
-                const.SYSV_ENV_PATH, self.name)
+                const.SYSV_ENV_PATH, self.name + '.defaults')
 
     def generate(self, overwrite=False):
-        """Generates a service and env vars file for a SysV service.
-        """
         super(SysV, self).generate(overwrite=overwrite)
         self._set_init_system_specific_params()
 
-        svc_file_tmplt = '{0}_{1}.j2'.format(
-            self.init_sys, self.init_sys_ver)
-        env_file_tmplt = '{0}_{1}.default.j2'.format(
-            self.init_sys, self.init_sys_ver)
+        svc_file_template = self.template_prefix
+        env_file_template = self.template_prefix + '.defaults'
+        self.svc_file_path = self.generate_into_prefix
+        self.env_file_path = self.generate_into_prefix + '.defaults'
 
-        self.svc_file_path = os.path.join(self.tmp, self.name)
-        self.env_file_path = os.path.join(self.tmp, self.name + '.defaults')
-
-        files = [self.svc_file_path, self.env_file_path]
-
-        self.generate_file_from_template(
-            svc_file_tmplt, self.svc_file_path)
-        self.generate_file_from_template(
-            env_file_tmplt, self.env_file_path)
-
-        return files
+        self.generate_file_from_template(svc_file_template, self.svc_file_path)
+        self.generate_file_from_template(env_file_template, self.env_file_path)
+        return self.files
 
     def install(self):
-        """Enables the service"""
         super(SysV, self).install()
 
         self.deploy_service_file(self.svc_file_path, self.svc_file_dest)
@@ -49,7 +41,6 @@ class SysV(Base):
         os.chmod(self.svc_file_dest, 755)
 
     def start(self):
-        """Starts the service"""
         try:
             sh.service(self.name, 'start', _bg=True)
         except sh.CommandNotFound:
@@ -98,7 +89,7 @@ class SysV(Base):
                 self.lgr.error('Command not found: {0}'.format(str(ex)))
                 sys.exit()
         svc_info = self._parse_service_info(service.status())
-        self.services.update({'services': svc_info})
+        self.services['services'] = svc_info
         return self.services
 
     @staticmethod
@@ -156,3 +147,9 @@ class SysV(Base):
             ulimits.append('-s {0}'.format(p['limit_stack_size']))
         if ulimits:
             self.params['ulimits'] = ' '.join(ulimits)
+
+    def validate_platform(self):
+        if utils.IS_WIN or utils.IS_DARWIN:
+            self.lgr.error(
+                'Cannot install SysVinit service on non-Linux systems.')
+            sys.exit()

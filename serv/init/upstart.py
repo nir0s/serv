@@ -1,6 +1,10 @@
 import os
 import re
-import sh
+import sys
+
+from serv import utils
+if not utils.IS_WIN:
+    import sh
 
 from serv.init.base import Base
 from serv import constants as const
@@ -9,29 +13,26 @@ from serv import constants as const
 class Upstart(Base):
     def __init__(self, lgr=None, **params):
         super(Upstart, self).__init__(lgr=lgr, **params)
+
         if self.name:
             self.svc_file_dest = os.path.join(
-                const.UPSTART_SCRIPT_PATH, self.name + '.conf')
+                const.UPSTART_SVC_PATH, self.name + '.conf')
 
     def generate(self, overwrite=False):
         """Generates a config file for an upstart service.
         """
         super(Upstart, self).generate(overwrite=overwrite)
 
-        svc_file_tmplt = '{0}_{1}.conf.j2'.format(
-            self.init_sys, self.init_sys_ver)
+        svc_file_template = self.template_prefix + '.conf'
+        self.svc_file_path = self.generate_into_prefix + '.conf'
 
-        self.svc_file_path = os.path.join(self.tmp, self.name)
-
-        files = [self.svc_file_path]
-
-        self.generate_file_from_template(svc_file_tmplt, self.svc_file_path)
-
-        return files
+        self.generate_file_from_template(svc_file_template, self.svc_file_path)
+        return self.files
 
     def install(self):
         """Enables the service"""
         super(Upstart, self).install()
+
         self.deploy_service_file(self.svc_file_path, self.svc_file_dest)
 
     def start(self):
@@ -53,7 +54,7 @@ class Upstart(Base):
         if name:
             # return list of one item for specific service
             svcs_info = [s for s in svcs_info if s['name'] == name]
-        self.services.update({'services': svcs_info})
+        self.services['services'] = svcs_info
         return self.services
 
     @staticmethod
@@ -91,3 +92,9 @@ class Upstart(Base):
 
     def is_service_exists(self):
         return os.path.isfile(self.svc_file_dest)
+
+    def validate_platform(self):
+        if utils.IS_WIN or utils.IS_DARWIN:
+            self.lgr.error(
+                'Cannot install SysVinit service on non-Linux systems.')
+            sys.exit()

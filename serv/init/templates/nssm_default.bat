@@ -2,15 +2,14 @@
 
 echo Installing {{ name }} as a windows service...
 
-{{ nssm_path }} install {{ name }} {{ cmd }} {{ args }}
+"{{ nssm_dir }}\nssm.exe" install "{{ name }}" "{{ cmd }}" "{{ args }}"
 
 if %errorlevel% neq 0 exit /b %errorlevel%
 
 echo Setting service environment
-
-{{ nssm_path }} set {{ name }} AppEnvironmentExtra ^
+{% if env %}{{ nssm_dir }}\nssm.exe set {{ name }} AppEnvironmentExtra ^
 {% for var, value in env.items() %}{% filter upper %}{{ var }}{% endfilter %}={{ value }} ^
-{% endfor %}
+{% endfor %}EXAMPLE_ENVIRONMENT_VARIABLE=example_value{% endif %}
 
 if %errorlevel% neq 0 exit /b %errorlevel%
 

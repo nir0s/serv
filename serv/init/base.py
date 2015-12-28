@@ -3,14 +3,29 @@ import os
 import json
 import sys
 from distutils.spawn import find_executable
-import tempfile
 import shutil
 
 import jinja2
 
+from serv import constants as const
+from serv import utils
+
 
 class Base(object):
     def __init__(self, lgr=None, **params):
+        """Provides defaults for all other subclasses.
+
+        This should always be supered.
+
+        `self.lgr` is the default logger.
+        `self.params` are all parameters for the service passed from the
+         CLI or the API.
+
+        `self.init_sys` is the name of the init system (e.g. systemd).
+        `self.init_sys_ver` is the version of the init system.
+        `self.cmd` is the command to run.
+        `self.name` is the name of the service.
+        """
         self.lgr = lgr
         self.params = params
 
@@ -20,7 +35,7 @@ class Base(object):
         self.name = params.get('name')
         self._set_default_parameter_values()
 
-        self._validate_init_system_params()
+        self._validate_service_params()
 
     def _set_default_parameter_values(self):
         p = self.params
@@ -30,39 +45,71 @@ class Base(object):
         p['user'] = p.get('user', 'root')
         p['group'] = p.get('group', 'root')
 
-    def _validate_init_system_params(self):
+    def _validate_service_params(self):
         niceness = self.params.get('nice')
         if niceness in self.params and (niceness < -20 or niceness > 19):
             self.lgr.error('`niceness` level must be between -20 and 19.')
-            sys.exit()
-        # WIP!
-        if 0 == 1:
-            limit_params = [
-                'limit_coredump',
-                'limit_cputime',
-                'limit_data',
-                'limit_file_size',
-                'limit_locked_memory',
-                'limit_open_files',
-                'limit_user_processes',
-                'limit_physical_memory',
-                'limit_stack_size',
-            ]
-            limits = [self.params.get(l) for l in limit_params]
-            for l in limit_params:
-                if l in self.params and int(self.params.get(l, '')) < 1:
-                    self.lgr.error('All limits must be greater than 0.')
-                    sys.exit()
+            sys.exit(1)
 
-            if not any(limits):
-                self.lgr.error('All limits must be greater than 0.')
-                self.exit()
+        limit_params = [
+            'limit_coredump',
+            'limit_cputime',
+            'limit_data',
+            'limit_file_size',
+            'limit_locked_memory',
+            'limit_open_files',
+            'limit_user_processes',
+            'limit_physical_memory',
+            'limit_stack_size',
+        ]
+
+        def _raise_limit_error():
+            self.lgr.error('All limits must be integers greater than 0 or '
+                           'ulimited. You provided a {0} with value '
+                           '{1}.'.format('limit_coredump', limit))
+            sys.exit(1)
+
+        for l in limit_params:
+            limit = self.params.get(l)
+            if limit not in (None, 'ulimited'):
+                try:
+                    value = int(limit)
+                except (ValueError, TypeError):
+                    _raise_limit_error()
+                if value < 1:
+                    _raise_limit_error()
 
     def generate(self, overwrite):
         """Generates service files.
+
+        This exposes several comforts.
+
+        `self.files` is a list into which all generated file paths will be
+        appended. It is later returned by `generate` to be consumed by any
+        program that wants to do something with it.
+
+        `self.templates` is the directory in which all templates are
+        stored. New init system implementations can use this to easily
+        pull template files.
+
+        `self.template_prefix` is a prefix for all template files.
+        Since all template files should be named
+        `<INIT_SYS_NAME>_<INIT_SYS_VERSION>*`, this will basically just
+        provide the prefix before the * for you to use.
+
+        `self.generate_into_prefix` is a prefix for the path into which
+        files will be generated. This is NOT the destination path for the
+        file when deploying the service.
+
+        `self.overwrite` automatically deals with overwriting files so that
+        the developer doesn't have to address this. It is provided by the API
+        or by the CLI and propagated.
         """
-        self.tmp = tempfile.gettempdir()
-        self.tempaltes = os.path.join(os.path.dirname(__file__), 'templates')
+        self.files = []
+        tmp = utils.get_tmp_dir(self.init_sys, self.name)
+        self.templates = os.path.join(os.path.dirname(__file__), 'templates')
+        self.template_prefix = '_'.join([self.init_sys, self.init_sys_ver])
+        self.generate_into_prefix = os.path.join(tmp, self.name)
         self.overwrite = overwrite
 
     def install(self):
@@ -70,11 +117,14 @@ class Base(object):
 
         This is relevant for init systems like systemd where you have to
         `sudo systemctl enable #SERVICE#` before starting a service.
+
+        When trying to install a service, if the executable for the command
+        is not found, this will fail miserably.
         """
         if not find_executable(self.cmd):
             self.lgr.error('Executable {0} could not be found.'.format(
                 self.cmd))
-            sys.exit()
+            sys.exit(1)
 
     def start(self):
         """Starts a service.
@@ -107,13 +157,19 @@ class Base(object):
         """Returns True if the init system exists on the current machine
         or False if it doesn't.
         """
-        raise NotImplementedError('Must be implemented by a subclass')
+        raise NotImplementedError('Must be implemented by a subclass.')
 
     def is_service_exists(self):
         """Returns True if the service is installed on the current machine
         and False if it isn't.
         """
-        raise NotImplementedError('Must be implemented by a subclass')
+        raise NotImplementedError('Must be implemented by a subclass.')
+
+    def validate_platform(self):
+        """Validates that the platform the user is trying to install the
+        service on is valid.
+        """
+        raise NotImplementedError('Must be implemented by a subclass.')
 
     def generate_file_from_template(self, template, destination):
         """Generates a file from a Jinja2 `template` and writes it to
@@ -146,14 +202,17 @@ class Base(object):
         self._should_overwrite(destination)
         with open(destination, 'w') as f:
             f.write(generated)
+        self.files.append(destination)
 
     def _should_overwrite(self, destination):
+        # TODO: this should probably move to serv.py and check for overwriting
+        # on service creation/installation.
         if os.path.isfile(destination):
             if self.overwrite:
                 self.lgr.debug('Overwriting: {0}'.format(destination))
             else:
                 self.lgr.error('File already exists: {0}'.format(destination))
-                sys.exit()
+                sys.exit(1)
 
     def _handle_service_directory(self, init_system_file, create_directory):
         dirname = os.path.dirname(init_system_file)
@@ -165,10 +224,23 @@ class Base(object):
                 self.lgr.error('Directory {0} does not exist and is required '
                                'for {1}. Terminating...'.format(
                                    dirname, init_system_file))
-                sys.exit()
+                sys.exit(1)
 
     def deploy_service_file(self, source, destination, create_directory=False):
         self._should_overwrite(destination)
-        self.lgr.info('Deploying {0} to {1}...'.format(source, destination))
         self._handle_service_directory(destination, create_directory)
+        self.lgr.info('Deploying {0} to {1}...'.format(source, destination))
         shutil.move(source, destination)
+
+    def generate_service_files(self):
+        files = []
+        for s in const.TEMPLATES[self.init_sys][self.init_sys_ver].keys():
+            # remove j2 suffix and then, for instance for:
+            # systemd['default']['service']
+            pfx = '_'.join([self.init_sys, self.init_sys_ver])
+            sfx = s or ''
+            template = pfx + sfx
+            self.destination = os.path.join(self.tmp, self.name + sfx)
+            files.append(self.destination)
+            self.generate_file_from_template(template, self.destination)
+        return files
