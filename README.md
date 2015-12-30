@@ -28,6 +28,7 @@ NOTE: Serv requires sudo permissions! (you can't write to /etc/init.d, /lib/syst
 
 I intend to add:
 
+* launchd
 * runit
 * supervisord
 * Whichever other system that's giving you (or me) a headache.
