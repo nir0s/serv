@@ -3,7 +3,7 @@ import re
 import sys
 import types
 
-import six
+from . import six
 
 IDENTIFIER = re.compile('^[a-z_][a-z0-9_]*$', re.I)
 

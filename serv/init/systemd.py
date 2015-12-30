@@ -2,7 +2,9 @@ import os
 import sys
 import re
 
-import sh
+from serv import utils
+if not utils.IS_WIN:
+    import sh
 
 from serv.init.base import Base
 from serv import constants as const
@@ -19,8 +21,11 @@ class SystemD(Base):
         paths for the service files as sometimes `self.name`
         is not provided (for instance, when retrieving status
         for all services under the init system.)
+
+        `self.name` is set in `base.py`
         """
         super(SystemD, self).__init__(lgr=lgr, **params)
+
         if self.name:
             self.svc_file_dest = os.path.join(
                 const.SYSTEMD_SVC_PATH, self.name + '.service')
@@ -40,28 +45,29 @@ class SystemD(Base):
         a user can just take and use.
         If the service is also installed, those files will be moved
         to the relevant location on the system.
+
+        Note that the parameters required to generate the file are
+        propagated automatically which is why we don't pass them explicitly
+        to the generating function.
+
+        `self.template_prefix` and `self.generate_into_prefix` are set in
+         `base.py`
+
+        `self.files` is an automatically generated list of the files that
+        were generated during the process. It should be returned so that
+        the generated files could be printed out for the user.
         """
         super(SystemD, self).generate(overwrite=overwrite)
         self._validate_init_system_specific_params()
 
-        # TODO: these should be standardized across all implementations.
-        svc_file_tmplt = '{0}_{1}.service.j2'.format(
-            self.init_sys, self.init_sys_ver)
-        env_file_tmplt = '{0}_{1}.env.j2'.format(
-            self.init_sys, self.init_sys_ver)
+        svc_file_template = self.template_prefix + '.service'
+        env_file_template = self.template_prefix
+        self.svc_file_path = self.generate_into_prefix + '.service'
+        self.env_file_path = self.generate_into_prefix
 
-        self.svc_file_path = os.path.join(self.tmp, self.name + '.service')
-        self.env_file_path = os.path.join(self.tmp, self.name)
-
-        files = [self.svc_file_path]
-
-        self.generate_file_from_template(svc_file_tmplt, self.svc_file_path)
-        if self.params.get('env'):
-            self.generate_file_from_template(
-                env_file_tmplt, self.env_file_path)
-            files.append(self.env_file_path)
-
-        return files
+        self.generate_file_from_template(svc_file_template, self.svc_file_path)
+        self.generate_file_from_template(env_file_template, self.env_file_path)
+        return self.files
 
     def install(self):
         """Installs the service on the local machine
@@ -71,10 +77,9 @@ class SystemD(Base):
         the service and make it ready to be `start`ed.
         """
         super(SystemD, self).install()
-        self.deploy_service_file(self.svc_file_path, self.svc_file_dest)
-        if self.params.get('env'):
-            self.deploy_service_file(self.env_file_path, self.env_file_dest)
 
+        self.deploy_service_file(self.svc_file_path, self.svc_file_dest)
+        self.deploy_service_file(self.env_file_path, self.env_file_dest)
         sh.systemctl.enable(self.name)
         sh.systemctl('daemon-reload')
 
@@ -99,7 +104,7 @@ class SystemD(Base):
         This is supposed to perform any cleanup operations required to
         remove the service. Files, links, whatever else should be removed.
         This method should also run when implementing cleanup in case of
-        failures.
+        failures. As such, idempotence should be considered.
         """
         sh.systemctl.disable(self.name)
         sh.systemctl('daemon-reload')
@@ -115,15 +120,18 @@ class SystemD(Base):
 
         There should be a standardization around the status fields.
         There currently isn't.
+
+        `self.services` is set in `base.py`
         """
         super(SystemD, self).status(name=name)
+
         svc_list = sh.systemctl('--no-legend', '--no-pager', t='service')
         svcs_info = [self._parse_service_info(svc) for svc in svc_list]
         if name:
             names = (name, name + '.service')
             # return list of one item for specific service
             svcs_info = [s for s in svcs_info if s['name'] in names]
-        self.services.update({'services': svcs_info})
+        self.services['services'] = svcs_info
         return self.services
 
     @staticmethod
@@ -165,4 +173,10 @@ class SystemD(Base):
         if not self.cmd.startswith('/'):
             self.lgr.error('Systemd requires the full path to the executable. '
                            'Instead, you provided: {0}'.format(self.cmd))
+            sys.exit()
+
+    def validate_platform(self):
+        if utils.IS_WIN or utils.IS_DARWIN:
+            self.lgr.error(
+                'Cannot install SysVinit service on non-Linux systems.')
             sys.exit()

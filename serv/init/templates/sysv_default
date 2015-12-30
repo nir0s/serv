@@ -20,11 +20,11 @@ export PATH
 
 name={{ name }}
 program={{ cmd }}
-args={{ args }}
+args="{{ args }}"
 pidfile="/var/run/$name.pid"
 
-[ -r /etc/default/$name ] && . /etc/default/$name
-[ -r /etc/sysconfig/$name ] && . /etc/sysconfig/$name
+[ -r /etc/default/$name.defaults ] && . /etc/default/$name.defaults
+[ -r /etc/sysconfig/$name.defaults ] && . /etc/sysconfig/$name.defaults
 
 trace() {
   logger -t "/etc/init.d/{{name}}" "$@"
@@ -51,15 +51,16 @@ start() {
     # If prestart fails, abort start.
     prestart || return $?
   fi
-  {{/prestart}}
+  {{/prestart}} #}
   # Setup any environmental stuff beforehand
-  {{{ulimit_shell}}} #}
-  # Run the program!
-  {# {{#nice}}nice -n "$nice" \{{/nice}} #}
+  {% if ulimits %}ulimit {{ ulimits }}{% endif %}
+  # Run the program!{% if nice %}
+  nice -n "$nice" \{% endif %}
   chroot --userspec "$user":"$group" "$chroot" sh -c "
-    {{{ulimit_shell}}}
+    {% if ulimits %}ulimit {{ ulimits }}{% endif %}
     cd \"$chdir\"
-    exec \"$program\" $args &
+    exec \"$program\" $args" &
+  # TODO: dunno if we want this.
   {# " >> {{{ sysv_log_path }}}.stdout 2>> {{{ sysv_log }}}.stderr #}
   # Generate the pidfile from here. If we instead made the forked process
   # generate it there will be a race condition between the pidfile writing
@@ -72,17 +73,17 @@ stop() {
   # Try a few times to kill TERM the program
   if status ; then
     pid=$(cat "$pidfile")
-    trace "Killing $name (pid $pid) with SIGTERM"
+    trace "Killing $name [pid $pid] with SIGTERM"
     kill -TERM $pid
     # Wait for it to exit.
     for i in 1 2 3 4 5 ; do
-      trace "Waiting $name (pid $pid) to die..."
+      trace "Waiting $name [pid $pid] to die..."
       status || break
       sleep 1
     done
     if status ; then
       if [ "$KILL_ON_STOP_TIMEOUT" -eq 1 ] ; then
-        trace "Timeout reached. Killing $name (pid $pid) with SIGKILL.  This may result in data loss."
+        trace "Timeout reached. Killing $name [pid $pid] with SIGKILL.  This may result in data loss."
         kill -KILL $pid
         emit "$name killed with SIGKILL."
       else
@@ -99,7 +100,7 @@ status() {
     if ps -p $pid > /dev/null 2> /dev/null ; then
       # process by this pid is running.
       # It may not be our pid, but that's what you get with just pidfiles.
-      # TODO(sissel): Check if this process seems to be the same as the one we
+      # TODO: Check if this process seems to be the same as the one we
       # expect. It'd be nice to use flock here, but flock uses fork, not exec,
       # so it makes it quite awkward to use in this case.
       return 0
@@ -118,22 +119,9 @@ force_stop() {
   fi
 }
 
-{# {{#prestart}}
-prestart() {
-  {{{ prestart }}}
-
-  status=$?
-
-  if [ $status -gt 0 ] ; then
-    emit "Prestart command failed with code $status. If you wish to skip the prestart command, set PRESTART=no in your environment."
-  fi
-  return $status
-}
-{{/prestart}} #}
-
 case "$1" in
   force-start|start|stop|force-stop|restart)
-    trace "Attempting '$1' on {{{name}}}"
+    trace "Attempting '$1' on {{ name }}"
     ;;
 esac
 

@@ -6,36 +6,36 @@
 
 SYSTEMD_SVC_PATH = '/lib/systemd/system'
 SYSTEMD_ENV_PATH = '/etc/sysconfig'
-UPSTART_SCRIPT_PATH = '/etc/init'
-SYSV_SCRIPT_PATH = '/etc/init.d'
+UPSTART_SVC_PATH = '/etc/init'
+SYSV_SVC_PATH = '/etc/init.d'
 SYSV_ENV_PATH = '/etc/default'
-NSSM_BINARY_LOCATION = 'c:\\nssm'
-NSSM_SCRIPT_PATH = 'c:\\nssm'
+NSSM_BINARY_PATH = 'c:\\nssm'
+NSSM_SVC_PATH = 'c:\\nssm'
 
 TEMPLATES = {
     'systemd': {
         'default': {
-            'systemd_default.service.j2': '/lib/systemd/system',
-            'systemd_default.env.j2': '/etc/sysconfig'
+            '.service': '/lib/systemd/system',
+            '': '/etc/sysconfig'
         }
     },
     'sysv': {
         'default': {
-            'sysv_default.default.j2': '/etc/default',
-            'sysv_default.j2': '/etc/init.d'
+            '': '/etc/init.d',
+            '.defaults': '/etc/default'
         }
     },
     'upstart': {
         'default': {
-            'upstart_default.conf.j2': '/etc/init'
+            '.conf': '/etc/init'
         },
         '1.5': {
-            'upstart_1.5.conf.j2': '/etc/init'
+            '.conf': '/etc/init'
         }
     },
     'nssm': {
         'default': {
-            'nssm_default.conf.j2': 'c:\\nssm'
+            '.bat': 'c:\nssm'
         }
     }
 }

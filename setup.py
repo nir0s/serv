@@ -16,16 +16,26 @@ def _get_package_data():
 
     Only files within `binaries` and `templates` will be added.
     """
-    from os.path import join as j
-    from os import listdir as ld
+    from os.path import join as jn
+    from os import listdir as ls
     x = 'init'
-    b = j('serv', x)
+    b = jn('serv', x)
     dr = ['binaries', 'templates']
-    return [j(x, d, f) for d in ld(b) if d in dr for f in ld(j(b, d))]
+    return [jn(x, d, f) for d in ls(b) if d in dr for f in ls(jn(b, d))]
+
+
+IS_WIN = (os.name == 'nt')
+install_requires = [
+    "click==6.2",
+    "ld==0.1.2",
+    "jinja2==2.8"
+]
+if not IS_WIN:
+    install_requires.append("sh==1.11")
 
 setup(
     name='Serv',
-    version="0.0.6",
+    version="0.1.0",
     url='https://github.com/nir0s/serv',
     author='nir0s',
     author_email='nir36g@gmail.com',
@@ -40,10 +50,5 @@ setup(
             'serv = serv.serv:main',
         ]
     },
-    install_requires=[
-        "click==6.2",
-        "ld==0.1.2",
-        "sh==1.11",
-        "jinja2==2.8"
-    ],
+    install_requires=install_requires
 )

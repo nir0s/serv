@@ -4,8 +4,7 @@ import logging
 import json
 import sys
 
-import sh
-import ld
+from . import utils
 import click
 
 from . import logger
@@ -14,13 +13,6 @@ from .init.base import Base
 
 
 lgr = logger.init()
-
-SUPPORTED_SYSTEMS = ['sysv', 'systemd', 'upstart']
-
-PLATFORM = sys.platform
-IS_WIN = (os.name == 'nt')
-IS_DARWIN = (PLATFORM == 'darwin')
-IS_LINUX = (PLATFORM == 'linux2')
 
 
 class Serv(object):
@@ -48,6 +40,7 @@ class Serv(object):
         self.params = dict(
             init_sys=self.init_sys, init_sys_ver=self.init_sys_ver)
 
+        # all implementation objects
         imps = self._find_all_implementations()
         # lowercase names of all implementations (e.g. [sysv, systemd])
         self.implementations = \
@@ -55,7 +48,7 @@ class Serv(object):
 
         if self.init_sys not in self.implementations:
             lgr.error('init system {0} not supported'.format(self.init_sys))
-            sys.exit()
+            sys.exit(1)
         # a class object which can be instantiated to control
         # a service.
         # this is instantiated with the relevant parameters (self.params)
@@ -73,24 +66,26 @@ class Serv(object):
 
         All implementations must be loaded within `init/__init__.py`.
         The implementations are retrieved by looking at all subclasses
-        of `Base`. If an implementation is found which matches the
-        requested init system, it is returned, else, `None` is returned.
+        of `Base`. A list of all implementations inheriting from Base
+        is returned.
         """
         init_systems = []
 
-        def get_impl(impl):
-            init_systems.append(impl)
-            subclasses = impl.__subclasses__()
+        def get_implemenetations(inherit_from):
+            init_systems.append(inherit_from)
+            subclasses = inherit_from.__subclasses__()
             if subclasses:
                 for subclass in subclasses:
-                    get_impl(subclass)
+                    get_implemenetations(subclass)
 
         lgr.debug('Finding init system implementations...')
-        get_impl(Base)
+        get_implemenetations(Base)
         return init_systems
 
     def _parse_env_vars(self, env_vars):
         """Returns a dict based on `key=value` pair strings.
+
+        Yeah yeah.. it's less performant.. splitting twice.. who cares.
         """
         env = {}
         for var in env_vars:
@@ -108,7 +103,7 @@ class Serv(object):
         will be named the same.
         """
         name = os.path.basename(cmd)
-        lgr.info('Service name not supplied, automatically assigning '
+        lgr.info('Service name not supplied. Assigning '
                  'name according to executable: {0}'.format(name))
         return name
 
@@ -125,16 +120,18 @@ class Serv(object):
         """
         if start and not deploy:
             lgr.error('Cannot start a service without deploying it.')
-            sys.exit()
+            sys.exit(1)
 
+        # TODO: parsing env vars and setting the name should probably be under
+        # `base.py`.
         name = name or self._set_name(cmd)
         self.params.update(**params)
-        # TODO: parsing env vars should probably be under `base.py`.
         self.params.update(dict(
             cmd=cmd,
             name=name,
             env=self._parse_env_vars(params.get('var', '')))
         )
+        self.params.pop('var')
         self._verify_implementation_found()
         self.init = self.implementation(lgr=lgr, **self.params)
 
@@ -144,10 +141,11 @@ class Serv(object):
         for f in files:
             lgr.info('Generated {0}'.format(f))
         if deploy:
+            self.init.validate_platform()
             if not self.init.is_system_exists():
-                lgr.error('Cannot start service. '
-                          '{0} is not installed.'.format(self.init_sys))
-                sys.exit()
+                lgr.error('Cannot install service. {0} is not installed '
+                          'on this system.'.format(self.init_sys))
+                sys.exit(1)
             lgr.info('Deploying {0} service {1}...'.format(
                 self.init_sys, name))
             self.init.install()
@@ -169,7 +167,10 @@ class Serv(object):
         self.params.update(dict(name=name))
         self._verify_implementation_found()
         init = self.implementation(lgr=lgr, **self.params)
-
+        if not init.is_service_exists():
+            lgr.info('Service {0} does not seem to be installed'.format(
+                name))
+            sys.exit(1)
         lgr.info('Removing {0} service {1}...'.format(self.init_sys, name))
         init.stop()
         init.uninstall()
@@ -187,21 +188,29 @@ class Serv(object):
             if not init.is_service_exists():
                 lgr.info('Service {0} does not seem to be installed'.format(
                     name))
-                sys.exit()
+                sys.exit(1)
         lgr.info('Retrieving status...'.format(name))
         return init.status(name)
 
     def _verify_implementation_found(self):
         if not self.implementation:
             lgr.error('No init system implementation could be found.')
-            sys.exit()
+            sys.exit(1)
 
     def lookup(self):
         """Returns the relevant init system and its version.
 
         This will try to look at the mapping first. If the mapping
         doesn't exist, it will try to identify it automatically.
+
+        Windows lookup is not supported and `nssm` is assumed.
         """
+        if utils.IS_WIN:
+            lgr.info('Lookup is not supported on Windows. Assuming nssm.')
+            return [('nssm', 'default')]
+        if utils.IS_DARWIN:
+            lgr.info('Lookup is not supported on OS X, Assuming Launchd.')
+            return [('launchd', 'default')]
         lgr.debug('Looking up init method...')
         return self._lookup_by_mapping() \
             or self._auto_lookup()
@@ -210,6 +219,7 @@ class Serv(object):
     def _get_upstart_version():
         """Returns the upstart version if it exists.
         """
+        import sh
         try:
             output = sh.initctl.version()
         except:
@@ -223,6 +233,7 @@ class Serv(object):
     def _get_systemctl_version():
         """Returns the systemd version if it exists.
         """
+        import sh
         try:
             output = sh.systemctl('--version').split('\n')[0]
         except:
@@ -268,6 +279,7 @@ class Serv(object):
         for Arch where the distro's ID changes (Manjaro, Antergos, etc...)
         But the "ID_LIKE" field is always (?) `arch`.
         """
+        import ld
         like = ld.like().lower()
         distro = ld.id().lower()
         version = ld.major_version()
@@ -286,7 +298,7 @@ def main():
     pass
 
 
-@click.command(context_settings=dict(ignore_unknown_options=True))
+@click.command()
 @click.argument('cmd', required=True)
 @click.option('-n', '--name',
               help='Name of service to create. If omitted, will be deducated '
@@ -326,35 +338,34 @@ def main():
 # TODO: add validation that valid umask.
 @click.option('--umask', required=False, type=int,
               help='process\'s `niceness` level. [e.g. 755]')
-@click.option('--limit-coredump', required=False, default='',
+@click.option('--limit-coredump', required=False, default=None,
               help='process\'s `limit-coredump` level. '
               '[`ulimited` || > 0 ]')
-@click.option('--limit-cputime', required=False, default='',
+@click.option('--limit-cputime', required=False, default=None,
               help='process\'s `limit-cputime` level. '
               '[`ulimited` || > 0 ]')
-@click.option('--limit-data', required=False, default='',
+@click.option('--limit-data', required=False, default=None,
               help='process\'s `limit-data` level. '
               '[`ulimited` || > 0 ]')
-@click.option('--limit-file_size', required=False, default='',
+@click.option('--limit-file_size', required=False, default=None,
               help='process\'s `limit-file-size` level. '
               '[`ulimited` || > 0 ]')
-@click.option('--limit-locked-memory', required=False, default='',
+@click.option('--limit-locked-memory', required=False, default=None,
               help='process\'s `limit-locked-memory` level. '
               '[`ulimited` || > 0 ]')
-@click.option('--limit-open-files', required=False, default='',
+@click.option('--limit-open-files', required=False, default=None,
               help='process\'s `limit-open-files` level. '
               '[`ulimited` || > 0 ]')
-@click.option('--limit-user-processes', required=False, default='',
+@click.option('--limit-user-processes', required=False, default=None,
               help='process\'s `limit-user-processes` level. '
               '[`ulimited` || > 0 ]')
-@click.option('--limit-physical-memory', required=False, default='',
+@click.option('--limit-physical-memory', required=False, default=None,
               help='process\'s `limit-physical-memory` level. '
               '[`ulimited` || > 0 ]')
-@click.option('--limit-stack-size', required=False, default='',
+@click.option('--limit-stack-size', required=False, default=None,
               help='process\'s `limit-stack-size` level. '
               '[`ulimited` || > 0 ]')
 @click.option('-v', '--verbose', default=False, is_flag=True)
-@click.argument('extra', nargs=-1, type=click.UNPROCESSED)
 def generate(cmd, name, init_system, init_system_version, overwrite,
              deploy, start, verbose, **params):
     """Creates (and maybe runs) a service.

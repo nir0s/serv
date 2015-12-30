@@ -23,8 +23,8 @@ program={{ cmd }}
 args="{{ args }}"
 pidfile="/var/run/$name.pid"
 
-[ -r /etc/default/$name ] && . /etc/default/$name
-[ -r /etc/sysconfig/$name ] && . /etc/sysconfig/$name
+[ -r /etc/default/$name.defaults ] && . /etc/default/$name.defaults
+[ -r /etc/sysconfig/$name.defaults ] && . /etc/sysconfig/$name.defaults
 
 trace() {
   logger -t "/etc/init.d/{{name}}" "$@"
