@@ -23,8 +23,7 @@ NOTE: Serv requires sudo permissions! (you can't write to /etc/init.d, /lib/syst
 
 ### Supported Init Systems
 
-[systemd](http://www.freedesktop.org/wiki/Software/systemd/), [Upstart](http://upstart.ubuntu.com/) and [SysVinit](https://wiki.archlinux.org/index.php/SysVinit) are mostly supported now though SysV doesn't yet support retrieving a service's `status`.
-[nssm](https://nssm.cc/) (Non-Sucking Service Manager for Windows) is currently being worked on.
+[systemd](http://www.freedesktop.org/wiki/Software/systemd/), [Upstart](http://upstart.ubuntu.com/), [nssm](https://nssm.cc/) (Non-Sucking Service Manager for Windows) and [SysVinit](https://wiki.archlinux.org/index.php/SysVinit) are mostly supported now though SysV doesn't yet support retrieving a service's `status`.
 
 I intend to add:
 
