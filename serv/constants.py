@@ -9,7 +9,7 @@ SYSTEMD_ENV_PATH = '/etc/sysconfig'
 UPSTART_SCRIPT_PATH = '/etc/init'
 SYSV_SCRIPT_PATH = '/etc/init.d'
 SYSV_ENV_PATH = '/etc/default'
-RUNIT_SCRIPT_PATH = 'etc/service/'
+RUNIT_SCRIPT_PATH = '/etc/service/'
 NSSM_BINARY_LOCATION = 'c:\\nssm'
 NSSM_SCRIPT_PATH = 'c:\\nssm'
 
