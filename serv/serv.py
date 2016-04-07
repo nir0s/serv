@@ -1,15 +1,20 @@
 import os
 import re
-import logging
-import json
 import sys
+import json
+import time
+import logging
 
-from . import utils
+try:
+    import sh
+except ImportError:
+    pass
 import click
 
+from . import utils
 from . import logger
-from . import constants as const
 from .init.base import Base
+from . import constants as const
 
 
 lgr = logger.init()
@@ -78,11 +83,10 @@ class Serv(object):
                 for subclass in subclasses:
                     get_implemenetations(subclass)
 
-        lgr.debug('Finding init system implementations...')
         get_implemenetations(Base)
         return init_systems
 
-    def _parse_env_vars(self, env_vars):
+    def _parse_service_env_vars(self, env_vars):
         """Returns a dict based on `key=value` pair strings.
 
         Yeah yeah.. it's less performant.. splitting twice.. who cares.
@@ -93,7 +97,7 @@ class Serv(object):
             env.update({k: v})
         return env
 
-    def _set_name(self, cmd):
+    def _set_service_name_from_command(self, cmd):
         """Sets the name of a service according to the command.
 
         This is only relevant if the name wasn't explicitly provided.
@@ -124,35 +128,37 @@ class Serv(object):
 
         # TODO: parsing env vars and setting the name should probably be under
         # `base.py`.
-        name = name or self._set_name(cmd)
+        name = name or self._set_service_name_from_command(cmd)
         self.params.update(**params)
         self.params.update(dict(
             cmd=cmd,
             name=name,
-            env=self._parse_env_vars(params.get('var', '')))
+            env=self._parse_service_env_vars(params.get('var', '')))
         )
         self.params.pop('var')
         self._verify_implementation_found()
-        self.init = self.implementation(lgr=lgr, **self.params)
+        init = self.implementation(lgr=lgr, **self.params)
 
         lgr.info('Generating {0} files for service {1}...'.format(
             self.init_sys, name))
-        files = self.init.generate(overwrite=overwrite)
+        files = init.generate(overwrite=overwrite)
         for f in files:
             lgr.info('Generated {0}'.format(f))
+
         if deploy:
-            self.init.validate_platform()
-            if not self.init.is_system_exists():
+            init.validate_platform()
+            if not init.is_system_exists():
                 lgr.error('Cannot install service. {0} is not installed '
                           'on this system.'.format(self.init_sys))
                 sys.exit(1)
             lgr.info('Deploying {0} service {1}...'.format(
                 self.init_sys, name))
-            self.init.install()
+            init.install()
+
             if start:
                 lgr.info('Starting {0} service {1}...'.format(
                     self.init_sys, name))
-                self.init.start()
+                init.start()
             lgr.info('Service created.')
         return files
 
@@ -164,33 +170,63 @@ class Serv(object):
         For instance, for upstart, it will `stop <name` and then
         delete /etc/init/<name>.conf.
         """
-        self.params.update(dict(name=name))
-        self._verify_implementation_found()
-        init = self.implementation(lgr=lgr, **self.params)
-        if not init.is_service_exists():
-            lgr.info('Service {0} does not seem to be installed'.format(
-                name))
-            sys.exit(1)
+        init = self._get_implementation(name)
+        self._verify_service_installed(init, name)
         lgr.info('Removing {0} service {1}...'.format(self.init_sys, name))
         init.stop()
         init.uninstall()
-        lgr.info('Service removed.')
+        if not init.is_service_exists():
+            lgr.info('Service removed.')
+        else:
+            lgr.error('Failed to remove main service file for some reason.')
 
     def status(self, name=''):
         """Returns a list containing a single service's info if `name`
         is supplied, else returns a list of all services' info.
         """
-        self.params.update(dict(name=name))
-        self._verify_implementation_found()
-        init = self.implementation(lgr=lgr, **self.params)
-
+        lgr.warn('Note that `status` is currently not so robust and may '
+                 'break on different systems.')
+        init = self._get_implementation(name)
         if name:
-            if not init.is_service_exists():
-                lgr.info('Service {0} does not seem to be installed'.format(
-                    name))
-                sys.exit(1)
+            self._verify_service_installed(init, name)
         lgr.info('Retrieving status...'.format(name))
         return init.status(name)
+
+    def stop(self, name):
+        """Stops a service"""
+        init = self._get_implementation(name)
+        self._verify_service_installed(init, name)
+        lgr.info('Stopping service: {0}...'.format(name))
+        init.stop()
+
+    def start(self, name):
+        """Starts a service"""
+        init = self._get_implementation(name)
+        self._verify_service_installed(init, name)
+        lgr.info('Starting service: {0}...'.format(name))
+        init.start()
+
+    def restart(self, name):
+        """Restarts a service"""
+        init = self._get_implementation(name)
+        self._verify_service_installed(init, name)
+        lgr.info('Restarting service: {0}...'.format(name))
+        init.stop()
+        # Here we would use status to verify that the service stopped
+        # before restarting. If only status was stable. eh..
+        time.sleep(3)
+        init.start()
+
+    def _get_implementation(self, name):
+        self.params.update(dict(name=name))
+        self._verify_implementation_found()
+        return self.implementation(lgr=lgr, **self.params)
+
+    def _verify_service_installed(self, init, name):
+        if not init.is_service_exists():
+            lgr.info('Service {0} does not seem to be installed'.format(
+                name))
+            sys.exit(1)
 
     def _verify_implementation_found(self):
         if not self.implementation:
@@ -206,20 +242,21 @@ class Serv(object):
         Windows lookup is not supported and `nssm` is assumed.
         """
         if utils.IS_WIN:
-            lgr.info('Lookup is not supported on Windows. Assuming nssm.')
+            lgr.debug('Lookup is not supported on Windows. Assuming nssm.')
             return [('nssm', 'default')]
         if utils.IS_DARWIN:
-            lgr.info('Lookup is not supported on OS X, Assuming Launchd.')
+            lgr.debug('Lookup is not supported on OS X, Assuming Launchd.')
             return [('launchd', 'default')]
         lgr.debug('Looking up init method...')
         return self._lookup_by_mapping() \
             or self._auto_lookup()
 
+    # TODO: both this and _get_systemctl_version should be under their
+    # corresponding implementations
     @staticmethod
     def _get_upstart_version():
-        """Returns the upstart version if it exists.
+        """Returns upstart's version if it exists.
         """
-        import sh
         try:
             output = sh.initctl.version()
         except:
@@ -231,9 +268,8 @@ class Serv(object):
 
     @staticmethod
     def _get_systemctl_version():
-        """Returns the systemd version if it exists.
+        """Returns systemctl's version if it exists.
         """
-        import sh
         try:
             output = sh.systemctl('--version').split('\n')[0]
         except:
@@ -371,7 +407,7 @@ def generate(cmd, name, init_system, init_system_version, overwrite,
     """Creates (and maybe runs) a service.
     """
     logger.configure()
-    Serv(init_system, init_system_version, verbose).generate(
+    Serv(init_system, init_system_version, verbose=verbose).generate(
         cmd, name, overwrite, deploy, start, **params)
 
 
@@ -385,7 +421,7 @@ def remove(name, init_system, verbose):
     """Stops and Removes a service
     """
     logger.configure()
-    Serv(init_system, verbose).remove(name)
+    Serv(init_system, verbose=verbose).remove(name)
 
 
 @click.command()
@@ -395,7 +431,7 @@ def remove(name, init_system, verbose):
               help='Init system to use.')
 @click.option('-v', '--verbose', default=False, is_flag=True)
 def status(name, init_system, verbose):
-    """Retrieves a service's status.
+    """Prints out a service's status
 
     If `init-system` is omitted,
     a service named `name` will be looked for under the
@@ -405,10 +441,52 @@ def status(name, init_system, verbose):
     retrieved.
     """
     logger.configure()
-    status = Serv(init_system, verbose).status(name)
+    status = Serv(init_system, verbose=verbose).status(name)
     print(json.dumps(status, indent=4, sort_keys=True))
+
+
+@click.command()
+@click.argument('name')
+@click.option('--init-system', required=False,
+              type=click.Choice(Serv().implementations),
+              help='Init system to use.')
+@click.option('-v', '--verbose', default=False, is_flag=True)
+def stop(name, init_system, verbose):
+    """Stops a service
+    """
+    logger.configure()
+    Serv(init_system, verbose=verbose).stop(name)
+
+
+@click.command()
+@click.argument('name')
+@click.option('--init-system', required=False,
+              type=click.Choice(Serv().implementations),
+              help='Init system to use.')
+@click.option('-v', '--verbose', default=False, is_flag=True)
+def start(name, init_system, verbose):
+    """Starts a service
+    """
+    logger.configure()
+    Serv(init_system, verbose=verbose).start(name)
+
+
+@click.command()
+@click.argument('name')
+@click.option('--init-system', required=False,
+              type=click.Choice(Serv().implementations),
+              help='Init system to use.')
+@click.option('-v', '--verbose', default=False, is_flag=True)
+def restart(name, init_system, verbose):
+    """Stops and Removes a service
+    """
+    logger.configure()
+    Serv(init_system, verbose=verbose).restart(name)
 
 
 main.add_command(generate)
 main.add_command(remove)
 main.add_command(status)
+main.add_command(stop)
+main.add_command(start)
+main.add_command(restart)

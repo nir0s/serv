@@ -12,14 +12,14 @@ The question that Serv tries to answer is: "Why the hell do I have to know init 
 
 ## Features
 
-* Abstracts away the platform (systemd, upstart, etc..) - Serv identifies it by itself thought it can be explicitly provided.
+* Abstracts away the platform (systemd, upstart, etc..) - Serv identifies it by itself though it can be explicitly provided.
 * Creates service configuration files on different platforms so that you don't have to.
 * Allows to deploy services after generating the config on the local machine.
-* Allows to stop and remove services.
+* Allows to start, stop, restart and remove services.
 * Provides both an API and CLI for those purposes.
 * Provides an API for retrieving service related information.
 
-NOTE: Serv requires sudo permissions! (you can't write to /etc/init.d, /lib/systemd/system and the others without root can ya?)
+NOTE: Serv requires sudo/Administrator privileges! (you can't write to /etc/init.d, /lib/systemd/system and the others without root can ya?)
 
 ### Supported Init Systems
 
@@ -67,11 +67,13 @@ Options:
 Commands:
   generate  Creates (and maybe runs) a service.
   remove    Stops and Removes a service
-  status    Retrieves a service's status.
+  restart   Stops and Removes a service
+  start     Starts a service
+  status    Prints out a service's status If...
+  stop      Stops a service
 
 ...
 ```
-
 
 
 ### Creating a service
@@ -99,7 +101,34 @@ LISTEN     0      5            *:8000                     *:*
 
 If name is omitted, the name of the service (and therefore, the names of the files) will be deduced from the executable's name.
 
+### Controlling a service
+
+NOTE: Existing services which were not created by Serv can also be controlled this way.
+
+```shell
+$ sudo serv stop MySimpleHTTPServer
+INFO - Stopping service: MySimpleHTTPServer...
+$ ss -lntp | grep 8000
+...
+$ sudo serv start MySimpleHTTPServer
+INFO - Starting service: MySimpleHTTPServer...
+$ ss -lntp | grep 8000
+LISTEN     0      5            *:8000                     *:*
+
+$ sudo serv restart MySimpleHTTPServer
+INFO - Restarting service: MySimpleHTTPServer...
+$ ss -lntp | grep 8000
+LISTEN     0      5            *:8000                     *:*
+...
+
+```
+
 ### Retrieving a service's status
+
+IMPORTANT NOTE: serv status is current very buggy. Except it to break and please submit issues.
+
+NOTE: Existing services which were not created by Serv can also be controlled this way.
+
 
 ```shell
 $ sudo serv status MySimpleHTTPServer
@@ -131,6 +160,8 @@ $ sudo serv status
 
 ### Removing a service
 
+NOTE: Existing services which were not created by Serv can also be controlled this way.
+
 ```shell
 $ sudo serv remove MySimpleHTTPServer
 ...
@@ -150,6 +181,8 @@ There are some differences between Windows and Linux support. While the API is p
 
 For instance, when providing the `--args` flag, single quotes won't do (e.g. '-m SimpleHTTPServer') but rather doubles must be used and cmd must be loaded as Administrator to be able to install the service as it requires elevated privileges.
 
+It's important to note that deploying a Windows service also deploys nssm itself and will not clean it up if a service is removed as it might be used by other services.
+
 ## Python API
 
 ```python
@@ -160,7 +193,7 @@ Kidding.. it's there, it's easy and it requires documentation.
 
 ## How does it work
 
-Serv, unless explicitly specified by the user, looks up the platform you're running on (Namely, linux distro and release) and deduces which init system is running on it by checking a static mapping table or an auto-lookup mechanism.
+Serv, unless explicitly specified by the user, looks up the platform you're running on (Namely, linux distro and release unless running on Windows or OS X) and deduces which init system is running on it by checking a static mapping table or an auto-lookup mechanism.
 
 Once an init-system matching an existing implementation (i.e supported by Serv) is found, Serv renders template files based on a set of parameters; (optionally) deploys them to the relevant directories and (optionally) starts the service.
 
@@ -171,11 +204,11 @@ Since Serv is aware of the init system being used, it also knows which files it 
 * Init system identification is not robust. It relies on some assumptions (and as we all know, assumption is the mother of all fuckups). Some OS distributions have multiple init systems (Ubuntu 14.04 has Upstart, SysV and half (HALF!?) of systemd).
 * Stupidly enough, I have yet to standardize the status JSON returned and it is different for each init system.
 * If anything fails during service creation, cleanup is not performed. This will be added in future versions.
-* Currently, all errors exit on the same error level. This will be changed soon.
+* Currently, all errors exit with the same error level. This will be changed soon.
 
 ### Missing directories
 
-In some situations, directories related to the specific init system do not exist and should be created. For instance, even if systemd (`systemctl`) is available, `/etc/sysconfig` does not exist. IT IS UP TO THE USER to create those directories if they don't exist as Serv should not change the system on that level. The exception to the rule is with `nssm`, which will create the required dir (`c:\nssm`) for it to operate.
+In some situations, directories related to the specific init system do not exist and should be created. For instance, even if systemd (`systemctl`) is available, `/etc/sysconfig` might not exist. IT IS UP TO THE USER to create those directories if they don't exist as Serv should not change the system on that level. The exception to the rule is with `nssm`, which will create the required dir (`c:\nssm`) for it to operate.
 
 The user will be notified of which directory is missing.
 
