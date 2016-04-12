@@ -3,11 +3,11 @@ import re
 import sys
 
 from serv import utils
-if not utils.IS_WIN:
-    import sh
-
 from serv.init.base import Base
 from serv import constants as const
+
+if not utils.IS_WIN:
+    import sh
 
 
 class Upstart(Base):

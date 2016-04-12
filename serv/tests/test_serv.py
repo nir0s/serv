@@ -126,12 +126,16 @@ class TestGenerate(testtools.TestCase):
 
 class TestDeploy(testtools.TestCase):
 
-    def setUp(self):
-        super(TestDeploy, self).setUp()
-        self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    @classmethod
+    def setUpClass(cls):
+        cls.service_name = 'test'
+        cls.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+
+    def tearDown(self):
+        super(TestDeploy, self).tearDown()
+        _invoke_click('remove', args=[self.service_name])
 
     def _verify_port_open(self):
-        # exponential backoff instead
         time.sleep(3)
         self.assertEqual(self.sock.connect_ex(('127.0.0.1', 8000)), 0)
 
@@ -140,13 +144,12 @@ class TestDeploy(testtools.TestCase):
                          10056 if utils.IS_WIN else 106)
 
     def _test_deploy_remove(self, system):
-        service_name = 'test'
         if system == 'nssm':
             args = find_executable('python') or 'c:\\python27\\python'
         else:
             args = find_executable('python2') or '/usr/bin/python2'
         opts = {
-            '-n': service_name,
+            '-n': self.service_name,
             '-a': '-m SimpleHTTPServer',
             '-d': None,
             '-s': None,
@@ -157,7 +160,7 @@ class TestDeploy(testtools.TestCase):
 
         _invoke_click('generate', [args], opts)
         self._verify_port_open()
-        _invoke_click('remove', args=[service_name])
+        _invoke_click('remove', args=[self.service_name])
         self._verify_port_closed()
 
     # TODO: these should all use init.is_system_exists to check whether
@@ -172,11 +175,15 @@ class TestDeploy(testtools.TestCase):
     def test_upstart(self):
         if utils.IS_WIN:
             self.skipTest('Irrelevant on Windows.')
+        if getpass.getuser() != 'travis':
+            self.skipTest('Should run on Travis.')
         self._test_deploy_remove('upstart')
 
     def test_sysv(self):
         if utils.IS_WIN:
             self.skipTest('Irrelevant on Windows.')
+        if getpass.getuser() == 'travis':
+            self.skipTest('Should run on Travis.')
         self._test_deploy_remove('sysv')
 
     def test_nssm(self):

@@ -1,13 +1,13 @@
 import os
-import sys
 import re
+import sys
 
 from serv import utils
-if not utils.IS_WIN:
-    import sh
-
 from serv.init.base import Base
 from serv import constants as const
+
+if not utils.IS_WIN:
+    import sh
 
 
 class SystemD(Base):
@@ -15,7 +15,7 @@ class SystemD(Base):
         """Sets the default parameters.
 
         We're supering this as `Base` is setting up some basic
-        globallly required parameters. It's a must.
+        globally required parameters. It's a must.
 
         We check for `self.name` before we set the destination
         paths for the service files as sometimes `self.name`
@@ -114,7 +114,7 @@ class SystemD(Base):
             os.remove(self.env_file_dest)
 
     def status(self, name=''):
-        """Returns a list of the status(es) of the `name` service, or
+        """Returns a list of the statuses of the `name` service, or
         if name is omitted, a list of the status of all services for this
         specific init system.
 
