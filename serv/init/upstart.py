@@ -37,10 +37,16 @@ class Upstart(Base):
 
     def start(self):
         """Starts the service"""
-        sh.start(self.name)
+        try:
+            sh.start(self.name)
+        except:
+            self.lgr.info('Service already started.')
 
     def stop(self):
-        sh.stop(self.name)
+        try:
+            sh.stop(self.name)
+        except:
+            self.lgr.info('Service already stopped.')
 
     def uninstall(self):
         if os.path.isfile(self.svc_file_dest):

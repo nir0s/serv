@@ -53,6 +53,8 @@ class SysV(Base):
             except sh.CommandNotFound as ex:
                 self.lgr.error('Comnand not found: {0}'.format(str(ex)))
                 sys.exit()
+        except:
+            self.lgr.info('Service already started.')
 
     def stop(self):
         try:
@@ -66,6 +68,8 @@ class SysV(Base):
             except sh.CommandNotFound as ex:
                 self.lgr.error('Command not found: {0}'.format(str(ex)))
                 sys.exit()
+        except:
+            self.lgr.info('Service already stopped.')
 
     def uninstall(self):
         if os.path.isfile(self.svc_file_dest):
