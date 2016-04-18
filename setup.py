@@ -27,7 +27,7 @@ def _get_package_data():
 IS_WIN = (os.name == 'nt')
 install_requires = [
     "click==6.2",
-    "ld==0.1.2",
+    "ld==0.5.0",
     "jinja2==2.8"
 ]
 if not IS_WIN:
@@ -35,7 +35,7 @@ if not IS_WIN:
 
 setup(
     name='Serv',
-    version="0.1.1",
+    version="0.1.2",
     url='https://github.com/nir0s/serv',
     author='nir0s',
     author_email='nir36g@gmail.com',
