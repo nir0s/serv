@@ -57,19 +57,17 @@ Before using, please read the caveats section!
 
 ```shell
 $ sudo serv
-...
-
 Usage: serv [OPTIONS] COMMAND [ARGS]...
 
 Options:
   --help  Show this message and exit.
 
 Commands:
-  generate  Creates (and maybe runs) a service.
+  generate  Creates a service.
   remove    Stops and Removes a service
-  restart   Stops and Removes a service
+  restart   Restarts a service
   start     Starts a service
-  status    Prints out a service's status If...
+  status    WIP! Try at your own expense
   stop      Stops a service
 
 ...
@@ -101,9 +99,13 @@ LISTEN     0      5            *:8000                     *:*
 
 If name is omitted, the name of the service (and therefore, the names of the files) will be deduced from the executable's name.
 
+#### Generating only
+
+If the `--deploy` flag isn't provided, files for the service will be generated and saved under a temp folder for you to use. This is useful when generating service files for use elsewhere.
+
 ### Controlling a service
 
-NOTE: Existing services which were not created by Serv can also be controlled this way.
+NOTE: Existing services which were not created by Serv can also be controlled.
 
 ```shell
 $ sudo serv stop MySimpleHTTPServer
