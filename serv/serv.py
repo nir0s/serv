@@ -404,7 +404,7 @@ def main():
 @click.option('-v', '--verbose', default=False, is_flag=True)
 def generate(cmd, name, init_system, init_system_version, overwrite,
              deploy, start, verbose, **params):
-    """Creates (and maybe runs) a service.
+    """Creates a service.
     """
     logger.configure()
     Serv(init_system, init_system_version, verbose=verbose).generate(
@@ -431,14 +431,7 @@ def remove(name, init_system, verbose):
               help='Init system to use.')
 @click.option('-v', '--verbose', default=False, is_flag=True)
 def status(name, init_system, verbose):
-    """Prints out a service's status
-
-    If `init-system` is omitted,
-    a service named `name` will be looked for under the
-    automatically identified init system.
-
-    If `name` is omitted, a status of all services will be
-    retrieved.
+    """WIP! Try at your own expense
     """
     logger.configure()
     status = Serv(init_system, verbose=verbose).status(name)
@@ -478,7 +471,7 @@ def start(name, init_system, verbose):
               help='Init system to use.')
 @click.option('-v', '--verbose', default=False, is_flag=True)
 def restart(name, init_system, verbose):
-    """Stops and Removes a service
+    """Restarts a service
     """
     logger.configure()
     Serv(init_system, verbose=verbose).restart(name)
