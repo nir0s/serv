@@ -168,7 +168,7 @@ class TestDeploy(testtools.TestCase):
     def test_systemd(self):
         if utils.IS_WIN:
             self.skipTest('Irrelevant on Windows.')
-        if getpass.getuser() != 'travis':
+        if getpass.getuser() == 'travis':
             self.skipTest('Cannot run on Travis.')
         self._test_deploy_remove('systemd')
 
@@ -182,7 +182,7 @@ class TestDeploy(testtools.TestCase):
     def test_sysv(self):
         if utils.IS_WIN:
             self.skipTest('Irrelevant on Windows.')
-        if getpass.getuser() == 'travis':
+        if getpass.getuser() != 'travis':
             self.skipTest('Should run on Travis.')
         self._test_deploy_remove('sysv')
 
