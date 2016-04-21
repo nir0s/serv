@@ -1,14 +1,14 @@
-import pkgutil
 import os
-import json
 import sys
-from distutils.spawn import find_executable
+import json
 import shutil
+import pkgutil
+from distutils.spawn import find_executable
 
 import jinja2
 
-from serv import constants as const
 from serv import utils
+from serv import constants as const
 
 
 class Base(object):
