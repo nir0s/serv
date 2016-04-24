@@ -1,7 +1,7 @@
-import sys
 import os
-import subprocess
+import sys
 import tempfile
+import subprocess
 
 PLATFORM = sys.platform
 IS_WIN = (os.name == 'nt')

@@ -2,9 +2,9 @@ import os
 import sys
 import shutil
 
+from serv import utils
 from serv.init.base import Base
 from serv import constants as const
-from serv import utils
 
 
 RUNNING_STATES = ['SERVICE_RUNNING', 'SERVICE_STOP_PENDING']
