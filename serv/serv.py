@@ -1,19 +1,19 @@
 import os
-import re
 import sys
 import json
 import time
 import logging
 
 try:
-    import sh
+    # irrelevant on windows
+    import distro
 except ImportError:
     pass
 import click
 
+from .init.base import Base
 from . import utils
 from . import logger
-from .init.base import Base
 from . import constants as const
 
 
@@ -21,44 +21,35 @@ lgr = logger.init()
 
 
 class Serv(object):
-    def __init__(self, init_system=None, init_system_version=None,
-                 verbose=False):
+    def __init__(self, init_system=None, verbose=False):
         if verbose:
             lgr.setLevel(logging.DEBUG)
         else:
             lgr.setLevel(logging.INFO)
 
-        if not init_system or not init_system_version:
+        if not init_system:
             result = self.lookup()
-        self.init_sys = init_system or result[0][0]
-        self.init_sys_ver = init_system_version or result[0][1]
-
+        self.init_sys = init_system or result[0]
         if not init_system:
             lgr.debug('Autodetected init system: {0}'.format(
                 self.init_sys))
-        if not init_system_version:
-            lgr.debug('Autodetected init system version: {0}'.format(
-                self.init_sys_ver))
 
-        # params to be used when manipulating a service.
-        # this is updated in each scenario.
-        self.params = dict(
-            init_sys=self.init_sys, init_sys_ver=self.init_sys_ver)
+        self.params = dict(init_sys=self.init_sys)
 
         # all implementation objects
-        imps = self._find_all_implementations()
-        # lowercase names of all implementations (e.g. [sysv, systemd])
-        self.implementations = \
-            [i.__name__.lower() for i in imps if i.__name__.lower() != 'base']
+        self.implementations = self._find_all_implementations()
+        lower_case_implementation_names = \
+            [implementation.__name__.lower() for implementation in
+             self.implementations if implementation.__name__.lower() != 'base']
 
-        if self.init_sys not in self.implementations:
+        if self.init_sys not in lower_case_implementation_names:
             lgr.error('init system {0} not supported'.format(self.init_sys))
             sys.exit(1)
         # a class object which can be instantiated to control
         # a service.
         # this is instantiated with the relevant parameters (self.params)
         # in each scenario.
-        self.implementation = self._get_init_system(imps)
+        self.implementation = self._get_init_system(self.implementations)
 
     def _get_init_system(self, init_systems):
         for system in init_systems:
@@ -243,44 +234,16 @@ class Serv(object):
         """
         if utils.IS_WIN:
             lgr.debug('Lookup is not supported on Windows. Assuming nssm.')
-            return [('nssm', 'default')]
+            return ['nssm']
         if utils.IS_DARWIN:
             lgr.debug('Lookup is not supported on OS X, Assuming Launchd.')
-            return [('launchd', 'default')]
+            return ['launchd']
         lgr.debug('Looking up init method...')
-        return self._lookup_by_mapping() \
-            or self._auto_lookup()
+        return self._init_sys_lookup_by_mapping() \
+            or self._init_sys_auto_lookup()
 
-    # TODO: both this and _get_systemctl_version should be under their
-    # corresponding implementations
-    @staticmethod
-    def _get_upstart_version():
-        """Returns upstart's version if it exists.
-        """
-        try:
-            output = sh.initctl.version()
-        except:
-            return
-        version = re.search(r'(\d+((.\d+)+)+?)', str(output))
-        if version:
-            return str(version.group())
-        return None
-
-    @staticmethod
-    def _get_systemctl_version():
-        """Returns systemctl's version if it exists.
-        """
-        try:
-            output = sh.systemctl('--version').split('\n')[0]
-        except:
-            return
-        version = re.search(r'(\d+)', str(output))
-        if version:
-            return str(version.group())
-        return None
-
-    def _auto_lookup(self):
-        """Returns a list of tuples of available init systems on the
+    def _init_sys_auto_lookup(self):
+        """Returns a list of available init systems on the
         current machine.
 
         Note that in some situations (Ubuntu 14.04 for instance) more than
@@ -288,19 +251,15 @@ class Serv(object):
         """
         init_systems = []
         if os.path.isdir('/usr/lib/systemd'):
-            version = self._get_systemctl_version()
-            if version:
-                init_systems.append('systemd', version or 'default')
+            init_systems.append('systemd')
         if os.path.isdir('/usr/share/upstart'):
-            version = self._get_upstart_version()
-            if version:
-                init_systems.append('upstart', version or 'default')
+            init_systems.append('upstart')
         if os.path.isdir('/etc/init.d'):
-            init_systems.append('sysv', 'lsb-3.1')
+            init_systems.append('sysv')
         return init_systems
 
     @staticmethod
-    def _lookup_by_mapping():
+    def _init_sys_lookup_by_mapping():
         """Returns a tuple containing the init system's type and version based
         on a constant mapping of distribution+version to init system..
 
@@ -315,24 +274,21 @@ class Serv(object):
         for Arch where the distro's ID changes (Manjaro, Antergos, etc...)
         But the "ID_LIKE" field is always (?) `arch`.
         """
-        import distro
         like = distro.like().lower()
         distribution_id = distro.id().lower()
         version = distro.major_version()
         # init (upstart 1.12.1)
-        if distribution_id in ('arch'):
+        if distribution_id or like in ('arch'):
             version = 'any'
-        elif like in ('arch'):
-            version = 'any'
-        d = const.DIST_TO_INITSYS.get(
+        init_sys = const.DIST_TO_INITSYS.get(
             distribution_id, const.DIST_TO_INITSYS.get(like))
-        if d:
-            return [d.get(version)] or []
+        if init_sys:
+            return [init_sys.get(version)] or []
 
 
 @click.group()
 def main():
-    pass
+    logger.configure()
 
 
 @click.command()
@@ -349,10 +305,6 @@ def main():
 @click.option('--init-system', required=False,
               type=click.Choice(Serv().implementations),
               help='Init system to use. (If omitted, will attempt to '
-              'automatically identify it.)')
-@click.option('--init-system-version', required=False, default='default',
-              type=click.Choice(['lsb-3.1', '1.5', 'default']),
-              help='Init system version to use. (If omitted, will attempt to '
               'automatically identify it.)')
 @click.option('--overwrite', default=False, is_flag=True,
               help='Whether to overwrite the service if it already exists.')
@@ -372,7 +324,7 @@ def main():
               '[Default: /]')
 @click.option('--nice', required=False, type=click.IntRange(-20, 19),
               help='process\'s `niceness` level. [-20 >< 19]')
-# TODO: add validation that valid umask.
+# TODO: add validation that umask is valid.
 @click.option('--umask', required=False, type=int,
               help='process\'s `niceness` level. [e.g. 755]')
 @click.option('--limit-coredump', required=False, default=None,
@@ -403,12 +355,11 @@ def main():
               help='process\'s `limit-stack-size` level. '
               '[`ulimited` || > 0 ]')
 @click.option('-v', '--verbose', default=False, is_flag=True)
-def generate(cmd, name, init_system, init_system_version, overwrite,
+def generate(cmd, name, init_system, overwrite,
              deploy, start, verbose, **params):
     """Creates a service.
     """
-    logger.configure()
-    Serv(init_system, init_system_version, verbose=verbose).generate(
+    Serv(init_system, verbose=verbose).generate(
         cmd, name, overwrite, deploy, start, **params)
 
 
@@ -421,7 +372,6 @@ def generate(cmd, name, init_system, init_system_version, overwrite,
 def remove(name, init_system, verbose):
     """Stops and Removes a service
     """
-    logger.configure()
     Serv(init_system, verbose=verbose).remove(name)
 
 
@@ -434,7 +384,6 @@ def remove(name, init_system, verbose):
 def status(name, init_system, verbose):
     """WIP! Try at your own expense
     """
-    logger.configure()
     status = Serv(init_system, verbose=verbose).status(name)
     print(json.dumps(status, indent=4, sort_keys=True))
 
@@ -448,7 +397,6 @@ def status(name, init_system, verbose):
 def stop(name, init_system, verbose):
     """Stops a service
     """
-    logger.configure()
     Serv(init_system, verbose=verbose).stop(name)
 
 
@@ -461,7 +409,6 @@ def stop(name, init_system, verbose):
 def start(name, init_system, verbose):
     """Starts a service
     """
-    logger.configure()
     Serv(init_system, verbose=verbose).start(name)
 
 
@@ -474,7 +421,6 @@ def start(name, init_system, verbose):
 def restart(name, init_system, verbose):
     """Restarts a service
     """
-    logger.configure()
     Serv(init_system, verbose=verbose).restart(name)
 
 
