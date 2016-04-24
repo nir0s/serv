@@ -315,16 +315,17 @@ class Serv(object):
         for Arch where the distro's ID changes (Manjaro, Antergos, etc...)
         But the "ID_LIKE" field is always (?) `arch`.
         """
-        import ld
-        like = ld.like().lower()
-        distro = ld.id().lower()
-        version = ld.major_version()
+        import distro
+        like = distro.like().lower()
+        distribution_id = distro.id().lower()
+        version = distro.major_version()
         # init (upstart 1.12.1)
-        if distro in ('arch'):
+        if distribution_id in ('arch'):
             version = 'any'
         elif like in ('arch'):
             version = 'any'
-        d = const.DIST_TO_INITSYS.get(distro, const.DIST_TO_INITSYS.get(like))
+        d = const.DIST_TO_INITSYS.get(
+            distribution_id, const.DIST_TO_INITSYS.get(like))
         if d:
             return [d.get(version)] or []
 
