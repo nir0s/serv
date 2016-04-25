@@ -22,7 +22,6 @@ class Base(object):
          CLI or the API.
 
         `self.init_sys` is the name of the init system (e.g. systemd).
-        `self.init_sys_ver` is the version of the init system.
         `self.cmd` is the command to run.
         `self.name` is the name of the service.
         """
@@ -30,7 +29,6 @@ class Base(object):
         self.params = params
 
         self.init_sys = params.get('init_sys')
-        self.init_sys_ver = params.get('init_sys_ver')
         self.cmd = params.get('cmd')
         self.name = params.get('name')
         self._set_default_parameter_values()
@@ -38,12 +36,12 @@ class Base(object):
         self._validate_service_params()
 
     def _set_default_parameter_values(self):
-        p = self.params
-        p['description'] = p.get('description', 'no description given')
-        p['chdir'] = p.get('chdir', '/')
-        p['chroot'] = p.get('chroot', '/')
-        p['user'] = p.get('user', 'root')
-        p['group'] = p.get('group', 'root')
+        self.params['description'] = self.params.get(
+            'description', 'no description given')
+        self.params['chdir'] = self.params.get('chdir', '/')
+        self.params['chroot'] = self.params.get('chroot', '/')
+        self.params['user'] = self.params.get('user', 'root')
+        self.params['group'] = self.params.get('group', 'root')
 
     def _validate_service_params(self):
         niceness = self.params.get('nice')
@@ -63,21 +61,21 @@ class Base(object):
             'limit_stack_size',
         ]
 
-        def _raise_limit_error():
+        def _raise_limit_error(limit_type, limit):
             self.lgr.error('All limits must be integers greater than 0 or '
                            'ulimited. You provided a {0} with value '
-                           '{1}.'.format('limit_coredump', limit))
+                           '{1}.'.format(limit_type, limit))
             sys.exit(1)
 
-        for l in limit_params:
-            limit = self.params.get(l)
+        for limit_type in limit_params:
+            limit = self.params.get(limit_type)
             if limit not in (None, 'ulimited'):
                 try:
                     value = int(limit)
                 except (ValueError, TypeError):
-                    _raise_limit_error()
+                    _raise_limit_error(limit_type, limit)
                 if value < 1:
-                    _raise_limit_error()
+                    _raise_limit_error(limit_type, limit)
 
     def generate(self, overwrite):
         """Generates service files.
@@ -94,7 +92,7 @@ class Base(object):
 
         `self.template_prefix` is a prefix for all template files.
         Since all template files should be named
-        `<INIT_SYS_NAME>_<INIT_SYS_VERSION>*`, this will basically just
+        `<INIT_SYS_NAME>*`, this will basically just
         provide the prefix before the * for you to use.
 
         `self.generate_into_prefix` is a prefix for the path into which
@@ -105,10 +103,11 @@ class Base(object):
         the developer doesn't have to address this. It is provided by the API
         or by the CLI and propagated.
         """
+        # TODO: move to constructor
         self.files = []
         tmp = utils.get_tmp_dir(self.init_sys, self.name)
         self.templates = os.path.join(os.path.dirname(__file__), 'templates')
-        self.template_prefix = '_'.join([self.init_sys, self.init_sys_ver])
+        self.template_prefix = self.init_sys
         self.generate_into_prefix = os.path.join(tmp, self.name)
         self.overwrite = overwrite
 
@@ -147,11 +146,7 @@ class Base(object):
         """Retrieves the status of a service `name` or all services
         for the current init system.
         """
-        self.services = dict(
-            init_system=self.init_sys,
-            init_system_version=self.init_sys_ver,
-            services=[]
-        )
+        self.services = dict(init_system=self.init_sys, services=[])
 
     def is_system_exists(self):
         """Returns True if the init system exists on the current machine
@@ -234,13 +229,11 @@ class Base(object):
 
     def generate_service_files(self):
         files = []
-        for s in const.TEMPLATES[self.init_sys][self.init_sys_ver].keys():
-            # remove j2 suffix and then, for instance for:
-            # systemd['default']['service']
-            pfx = '_'.join([self.init_sys, self.init_sys_ver])
-            sfx = s or ''
-            template = pfx + sfx
-            self.destination = os.path.join(self.tmp, self.name + sfx)
+        for file_type in const.TEMPLATES[self.init_sys].keys():
+            prefix = self.init_sys
+            suffix = file_type or ''
+            template = prefix + suffix
+            self.destination = os.path.join(self.tmp, self.name + suffix)
             files.append(self.destination)
             self.generate_file_from_template(template, self.destination)
         return files
