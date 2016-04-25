@@ -22,7 +22,6 @@ class Base(object):
          CLI or the API.
 
         `self.init_sys` is the name of the init system (e.g. systemd).
-        `self.init_sys_ver` is the version of the init system.
         `self.cmd` is the command to run.
         `self.name` is the name of the service.
         """

@@ -323,36 +323,36 @@ def main():
               help='Directory to change to before executing `cmd`. '
               '[Default: /]')
 @click.option('--nice', required=False, type=click.IntRange(-20, 19),
-              help='process\'s `niceness` level. [-20 >< 19]')
+              help="process\'s `niceness` level. [-20 >< 19]'")
 # TODO: add validation that umask is valid.
 @click.option('--umask', required=False, type=int,
-              help='process\'s `niceness` level. [e.g. 755]')
+              help="process\'s `niceness` level. [e.g. 755]'")
 @click.option('--limit-coredump', required=False, default=None,
-              help='process\'s `limit-coredump` level. '
+              help="process\'s `limit-coredump` level. "
               '[`ulimited` || > 0 ]')
 @click.option('--limit-cputime', required=False, default=None,
-              help='process\'s `limit-cputime` level. '
+              help="process\'s `limit-cputime` level. "
               '[`ulimited` || > 0 ]')
 @click.option('--limit-data', required=False, default=None,
-              help='process\'s `limit-data` level. '
+              help="process\'s `limit-data` level. "
               '[`ulimited` || > 0 ]')
 @click.option('--limit-file_size', required=False, default=None,
-              help='process\'s `limit-file-size` level. '
+              help="process\'s `limit-file-size` level. "
               '[`ulimited` || > 0 ]')
 @click.option('--limit-locked-memory', required=False, default=None,
-              help='process\'s `limit-locked-memory` level. '
+              help="process\'s `limit-locked-memory` level. "
               '[`ulimited` || > 0 ]')
 @click.option('--limit-open-files', required=False, default=None,
-              help='process\'s `limit-open-files` level. '
+              help="process\'s `limit-open-files` level. "
               '[`ulimited` || > 0 ]')
 @click.option('--limit-user-processes', required=False, default=None,
-              help='process\'s `limit-user-processes` level. '
+              help="process\'s `limit-user-processes` level. "
               '[`ulimited` || > 0 ]')
 @click.option('--limit-physical-memory', required=False, default=None,
-              help='process\'s `limit-physical-memory` level. '
+              help="process\'s `limit-physical-memory` level. "
               '[`ulimited` || > 0 ]')
 @click.option('--limit-stack-size', required=False, default=None,
-              help='process\'s `limit-stack-size` level. '
+              help="process\'s `limit-stack-size` level. "
               '[`ulimited` || > 0 ]')
 @click.option('-v', '--verbose', default=False, is_flag=True)
 def generate(cmd, name, init_system, overwrite,

@@ -53,6 +53,13 @@ class TestGenerate(testtools.TestCase):
             '--overwrite': None,
             '--init-system=': sys
         }
+        # additional_opts = {
+        #     '--nice': 5,
+        #     '--limit-coredump': 10,
+        #     '--limit-physical-memory': 20,
+        #     '--var': 'KEY1=VALUE1'
+        # }
+        # opts.update(additional_opts)
         try:
             _invoke_click('generate', [self.cmd], opts)
             f = self._get_file_for_system(sys)
@@ -65,6 +72,14 @@ class TestGenerate(testtools.TestCase):
     def test_systemd(self):
         self._test_generate('systemd')
         self.assertIn(self.cmd + ' ' + self.args, self.content)
+        # self.assertIn('LimitNICE=5', self.content)
+        # self.assertIn('LimitCORE=10', self.content)
+        # self.assertIn('LimitRSS=20', self.content)
+        # env_vars_file = os.path.join(
+        #     utils.get_tmp_dir('systemd', self.service), self.service)
+        # with open(env_vars_file) as vars_file:
+        #     content = vars_file.read()
+        # self.assertIn('KEY1=VALUE1', content)
 
     def test_upstart(self):
         self._test_generate('upstart')
