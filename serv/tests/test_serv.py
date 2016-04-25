@@ -1,15 +1,17 @@
-import socket
-import time
 import os
+import time
+import socket
 import shutil
-import getpass
+import subprocess
 from distutils.spawn import find_executable
 
-import click.testing as clicktest
 import testtools
+import click.testing as clicktest
 
-import serv.serv as serv
 from serv import utils
+import serv.serv as serv
+
+from serv import init
 
 
 def _invoke_click(func, args=None, opts=None):
@@ -36,6 +38,14 @@ class TestGenerate(testtools.TestCase):
         self.upstart = self.service + '.conf'
         self.sysv = self.service
 
+    def tearDown(self):
+        super(TestGenerate, self).tearDown()
+        # TODO: ignore_errors?
+        try:
+            shutil.rmtree(os.path.dirname(self.init_script))
+        except:
+            pass
+
     def _get_file_for_system(self, system):
         return os.path.join(
             utils.get_tmp_dir(system, self.service), getattr(self, system))
@@ -53,33 +63,60 @@ class TestGenerate(testtools.TestCase):
             '--overwrite': None,
             '--init-system=': sys
         }
-        try:
-            _invoke_click('generate', [self.cmd], opts)
-            f = self._get_file_for_system(sys)
-            self.assertTrue(f)
-            with open(f) as generated_file:
-                self.content = generated_file.read()
-        finally:
-            shutil.rmtree(os.path.dirname(f))
+        additional_opts = {
+            '--nice=': '5',
+            '--limit-coredump=': '10',
+            '--limit-physical-memory=': '20',
+            '--var=': 'KEY1=VALUE1'
+        }
+        opts.update(additional_opts)
+        self.init_script = self._get_file_for_system(sys)
+        _invoke_click('generate', [self.cmd], opts)
+        self.assertTrue(self.init_script)
+        with open(self.init_script) as generated_file:
+            self.content = generated_file.read()
 
     def test_systemd(self):
         self._test_generate('systemd')
         self.assertIn(self.cmd + ' ' + self.args, self.content)
 
+        self.assertIn('LimitNICE=5', self.content)
+        self.assertIn('LimitCORE=10', self.content)
+        self.assertIn('LimitRSS=20', self.content)
+        env_vars_file = os.path.join(
+            utils.get_tmp_dir('systemd', self.service), self.service)
+        with open(env_vars_file) as vars_file:
+            content = vars_file.read()
+        self.assertIn('KEY1=VALUE1', content)
+
     def test_upstart(self):
         self._test_generate('upstart')
         self.assertIn(self.cmd + ' ' + self.args, self.content)
+
+        self.assertIn('nice 5', self.content)
+        self.assertIn('limit core 10 10', self.content)
+        self.assertIn('limit rss 20 20', self.content)
+        self.assertIn('env KEY1=VALUE1', self.content)
 
     def test_sysv(self):
         self._test_generate('sysv')
         self.assertIn('program={0}'.format(self.cmd), self.content)
         self.assertIn('args="{0}"'.format(self.args), self.content)
+        self.assertIn('nice -n "$nice"', self.content)
+        self.assertIn('ulimit -d 10 -m 20', self.content)
+        env_vars_file = os.path.join(
+            utils.get_tmp_dir('sysv', self.service),
+            self.service + '.defaults')
+        with open(env_vars_file) as vars_file:
+            content = vars_file.read()
+        self.assertIn('nice="5"', content)
 
     def test_nssm(self):
         self._test_generate('nssm')
         self.assertIn(
             '"{0}" "{1}" "{2}"'.format(self.service, self.cmd, self.args),
             self.content)
+        self.assertIn('KEY1=VALUE1 ^', self.content)
 
     def test_generate_no_overwrite(self):
         sys = 'systemd'
@@ -128,26 +165,42 @@ class TestDeploy(testtools.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.service_name = 'test'
+        cls.service_name = 'testservice'
         cls.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+
+    def setUp(self):
+        super(TestDeploy, self).setUp()
 
     def tearDown(self):
         super(TestDeploy, self).tearDown()
-        _invoke_click('remove', args=[self.service_name])
 
     def _verify_port_open(self):
-        time.sleep(3)
-        self.assertEqual(self.sock.connect_ex(('127.0.0.1', 8000)), 0)
+        # for some reason, socket does a bad job identifying opened
+        # and closed ports here. weird.
+        time.sleep(1)
+        if utils.IS_WIN:
+            self.assertEqual(self.sock.connect_ex(('127.0.0.1', 8000)), 0)
+        else:
+            subprocess.check_call(
+                'ss -lnpt | grep 8000', shell=True, stdout=subprocess.PIPE)
 
     def _verify_port_closed(self):
-        self.assertEqual(self.sock.connect_ex(('127.0.0.1', 8000)),
-                         10056 if utils.IS_WIN else 106)
+        time.sleep(1)
+        if utils.IS_WIN:
+            self.assertEqual(self.sock.connect_ex(('127.0.0.1', 8000)), 10056)
+        else:
+            try:
+                subprocess.check_call(
+                    'ss -lnpt | grep 8000', shell=True, stdout=subprocess.PIPE)
+            except subprocess.CalledProcessError as ex:
+                self.assertIn('returned non-zero exit status 1', str(ex))
 
     def _test_deploy_remove(self, system):
         if system == 'nssm':
             args = find_executable('python') or 'c:\\python27\\python'
         else:
             args = find_executable('python2') or '/usr/bin/python2'
+        init_system = {'--init-system=': system}
         opts = {
             '-n': self.service_name,
             '-a': '-m SimpleHTTPServer',
@@ -155,35 +208,40 @@ class TestDeploy(testtools.TestCase):
             '-s': None,
             '-v': None,
             '--overwrite': None,
-            '--init-system=': system
         }
+        opts.update(init_system)
 
         _invoke_click('generate', [args], opts)
         self._verify_port_open()
-        _invoke_click('remove', args=[self.service_name])
+        if not utils.IS_WIN:
+            _invoke_click('stop', [self.service_name], init_system)
+            self._verify_port_closed()
+            _invoke_click('start', [self.service_name], init_system)
+            self._verify_port_open()
+            _invoke_click('restart', [self.service_name], init_system)
+            self._verify_port_open()
+        _invoke_click('remove', [self.service_name], init_system)
         self._verify_port_closed()
 
-    # TODO: these should all use init.is_system_exists to check whether
-    # a test can run or not. this is just silly.
     def test_systemd(self):
         if utils.IS_WIN:
             self.skipTest('Irrelevant on Windows.')
-        if getpass.getuser() != 'travis':
-            self.skipTest('Cannot run on Travis.')
+        if not init.systemd.is_system_exists():
+            self.skipTest('Systemd not found on this system.')
         self._test_deploy_remove('systemd')
 
     def test_upstart(self):
         if utils.IS_WIN:
             self.skipTest('Irrelevant on Windows.')
-        if getpass.getuser() != 'travis':
-            self.skipTest('Should run on Travis.')
+        if not init.upstart.is_system_exists():
+            self.skipTest('Upstart not found on this system.')
         self._test_deploy_remove('upstart')
 
     def test_sysv(self):
         if utils.IS_WIN:
             self.skipTest('Irrelevant on Windows.')
-        if getpass.getuser() == 'travis':
-            self.skipTest('Should run on Travis.')
+        if not init.sysv.is_system_exists():
+            self.skipTest('SysVinit not found on this system.')
         self._test_deploy_remove('sysv')
 
     def test_nssm(self):

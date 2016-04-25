@@ -145,16 +145,14 @@ class SystemD(Base):
             description=svc_info[4]
         )
 
-    def is_system_exists(self):
+    @staticmethod
+    def is_system_exists():
         """Returns True if the init system exists and False if not.
         """
-        try:
-            sh.systemctl('--version')
-            return True
-        except:
-            return False
+        return is_system_exists()
 
-    def get_system_version(self):
+    @staticmethod
+    def get_system_version():
         """Returns the init system's version if it exists.
         """
         try:
@@ -180,3 +178,11 @@ class SystemD(Base):
             self.lgr.error(
                 'Cannot install SysVinit service on non-Linux systems.')
             sys.exit()
+
+
+def is_system_exists():
+    try:
+        sh.systemctl('--version')
+        return True
+    except:
+        return False

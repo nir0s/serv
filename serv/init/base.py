@@ -38,12 +38,13 @@ class Base(object):
         self._validate_service_params()
 
     def _set_default_parameter_values(self):
-        p = self.params
-        p['description'] = p.get('description', 'no description given')
-        p['chdir'] = p.get('chdir', '/')
-        p['chroot'] = p.get('chroot', '/')
-        p['user'] = p.get('user', 'root')
-        p['group'] = p.get('group', 'root')
+        params = self.params
+        params['description'] = params.get(
+            'description', 'no description given')
+        params['chdir'] = params.get('chdir', '/')
+        params['chroot'] = params.get('chroot', '/')
+        params['user'] = params.get('user', 'root')
+        params['group'] = params.get('group', 'root')
 
     def _validate_service_params(self):
         niceness = self.params.get('nice')
@@ -63,21 +64,21 @@ class Base(object):
             'limit_stack_size',
         ]
 
-        def _raise_limit_error():
+        def _raise_limit_error(limit_type, limit):
             self.lgr.error('All limits must be integers greater than 0 or '
                            'ulimited. You provided a {0} with value '
-                           '{1}.'.format('limit_coredump', limit))
+                           '{1}.'.format(limit_type, limit))
             sys.exit(1)
 
-        for l in limit_params:
-            limit = self.params.get(l)
+        for limit_type in limit_params:
+            limit = self.params.get(limit_type)
             if limit not in (None, 'ulimited'):
                 try:
                     value = int(limit)
                 except (ValueError, TypeError):
-                    _raise_limit_error()
+                    _raise_limit_error(limit_type, limit)
                 if value < 1:
-                    _raise_limit_error()
+                    _raise_limit_error(limit_type, limit)
 
     def generate(self, overwrite):
         """Generates service files.
@@ -234,13 +235,12 @@ class Base(object):
 
     def generate_service_files(self):
         files = []
-        for s in const.TEMPLATES[self.init_sys][self.init_sys_ver].keys():
-            # remove j2 suffix and then, for instance for:
-            # systemd['default']['service']
-            pfx = '_'.join([self.init_sys, self.init_sys_ver])
-            sfx = s or ''
-            template = pfx + sfx
-            self.destination = os.path.join(self.tmp, self.name + sfx)
+        for file_type in \
+                const.TEMPLATES[self.init_sys][self.init_sys_ver].keys():
+            prefix = '_'.join([self.init_sys, self.init_sys_ver])
+            suffix = file_type or ''
+            template = prefix + suffix
+            self.destination = os.path.join(self.tmp, self.name + suffix)
             files.append(self.destination)
             self.generate_file_from_template(template, self.destination)
         return files

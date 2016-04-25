@@ -6,6 +6,7 @@ import time
 import logging
 
 try:
+    import distro
     import sh
 except ImportError:
     pass
@@ -46,19 +47,19 @@ class Serv(object):
             init_sys=self.init_sys, init_sys_ver=self.init_sys_ver)
 
         # all implementation objects
-        imps = self._find_all_implementations()
-        # lowercase names of all implementations (e.g. [sysv, systemd])
-        self.implementations = \
-            [i.__name__.lower() for i in imps if i.__name__.lower() != 'base']
+        implementations = self._find_all_implementations()
+        self.implementation_names = \
+            [implementation.__name__.lower() for implementation in
+             implementations if implementation.__name__.lower() != 'base']
 
-        if self.init_sys not in self.implementations:
+        if self.init_sys not in self.implementation_names:
             lgr.error('init system {0} not supported'.format(self.init_sys))
             sys.exit(1)
         # a class object which can be instantiated to control
         # a service.
         # this is instantiated with the relevant parameters (self.params)
         # in each scenario.
-        self.implementation = self._get_init_system(imps)
+        self.implementation = self._get_init_system(implementations)
 
     def _get_init_system(self, init_systems):
         for system in init_systems:
@@ -249,7 +250,7 @@ class Serv(object):
             return [('launchd', 'default')]
         lgr.debug('Looking up init method...')
         return self._lookup_by_mapping() \
-            or self._auto_lookup()
+            or self._init_sys_auto_lookup()
 
     # TODO: both this and _get_systemctl_version should be under their
     # corresponding implementations
@@ -279,7 +280,7 @@ class Serv(object):
             return str(version.group())
         return None
 
-    def _auto_lookup(self):
+    def _init_sys_auto_lookup(self):
         """Returns a list of tuples of available init systems on the
         current machine.
 
@@ -315,19 +316,18 @@ class Serv(object):
         for Arch where the distro's ID changes (Manjaro, Antergos, etc...)
         But the "ID_LIKE" field is always (?) `arch`.
         """
-        import distro
         like = distro.like().lower()
         distribution_id = distro.id().lower()
         version = distro.major_version()
         # init (upstart 1.12.1)
         if distribution_id in ('arch'):
             version = 'any'
-        elif like in ('arch'):
+        if like in ('arch'):
             version = 'any'
-        d = const.DIST_TO_INITSYS.get(
+        init_sys = const.DIST_TO_INITSYS.get(
             distribution_id, const.DIST_TO_INITSYS.get(like))
-        if d:
-            return [d.get(version)] or []
+        if init_sys:
+            return [init_sys.get(version)] or []
 
 
 @click.group()
@@ -347,7 +347,7 @@ def main():
 @click.option('-s', '--start', default=False, is_flag=True,
               help='Start the service after deploying it.')
 @click.option('--init-system', required=False,
-              type=click.Choice(Serv().implementations),
+              type=click.Choice(Serv().implementation_names),
               help='Init system to use. (If omitted, will attempt to '
               'automatically identify it.)')
 @click.option('--init-system-version', required=False, default='default',
@@ -371,36 +371,38 @@ def main():
               help='Directory to change to before executing `cmd`. '
               '[Default: /]')
 @click.option('--nice', required=False, type=click.IntRange(-20, 19),
-              help='process\'s `niceness` level. [-20 >< 19]')
+              help="process's `niceness` level. [-20 >< 19]"
+              )
 # TODO: add validation that valid umask.
 @click.option('--umask', required=False, type=int,
-              help='process\'s `niceness` level. [e.g. 755]')
+              help="process's `niceness` level. [e.g. 755]"
+              )
 @click.option('--limit-coredump', required=False, default=None,
-              help='process\'s `limit-coredump` level. '
+              help="process's `limit-coredump` level. "
               '[`ulimited` || > 0 ]')
 @click.option('--limit-cputime', required=False, default=None,
-              help='process\'s `limit-cputime` level. '
+              help="process's `limit-cputime` level. "
               '[`ulimited` || > 0 ]')
 @click.option('--limit-data', required=False, default=None,
-              help='process\'s `limit-data` level. '
+              help="process's `limit-data` level. "
               '[`ulimited` || > 0 ]')
-@click.option('--limit-file_size', required=False, default=None,
-              help='process\'s `limit-file-size` level. '
+@click.option('--limit-file-size', required=False, default=None,
+              help="process's `limit-file-size` level. "
               '[`ulimited` || > 0 ]')
 @click.option('--limit-locked-memory', required=False, default=None,
-              help='process\'s `limit-locked-memory` level. '
+              help="process's `limit-locked-memory` level. "
               '[`ulimited` || > 0 ]')
 @click.option('--limit-open-files', required=False, default=None,
-              help='process\'s `limit-open-files` level. '
+              help="process's `limit-open-files` level. "
               '[`ulimited` || > 0 ]')
 @click.option('--limit-user-processes', required=False, default=None,
-              help='process\'s `limit-user-processes` level. '
+              help="process's `limit-user-processes` level. "
               '[`ulimited` || > 0 ]')
 @click.option('--limit-physical-memory', required=False, default=None,
-              help='process\'s `limit-physical-memory` level. '
+              help="process's `limit-physical-memory` level. "
               '[`ulimited` || > 0 ]')
 @click.option('--limit-stack-size', required=False, default=None,
-              help='process\'s `limit-stack-size` level. '
+              help="process's `limit-stack-size` level. "
               '[`ulimited` || > 0 ]')
 @click.option('-v', '--verbose', default=False, is_flag=True)
 def generate(cmd, name, init_system, init_system_version, overwrite,
@@ -415,7 +417,7 @@ def generate(cmd, name, init_system, init_system_version, overwrite,
 @click.command()
 @click.argument('name')
 @click.option('--init-system', required=False,
-              type=click.Choice(Serv().implementations),
+              type=click.Choice(Serv().implementation_names),
               help='Init system to use.')
 @click.option('-v', '--verbose', default=False, is_flag=True)
 def remove(name, init_system, verbose):
@@ -428,7 +430,7 @@ def remove(name, init_system, verbose):
 @click.command()
 @click.argument('name', required=False)
 @click.option('--init-system', required=False,
-              type=click.Choice(Serv().implementations),
+              type=click.Choice(Serv().implementation_names),
               help='Init system to use.')
 @click.option('-v', '--verbose', default=False, is_flag=True)
 def status(name, init_system, verbose):
@@ -442,7 +444,7 @@ def status(name, init_system, verbose):
 @click.command()
 @click.argument('name')
 @click.option('--init-system', required=False,
-              type=click.Choice(Serv().implementations),
+              type=click.Choice(Serv().implementation_names),
               help='Init system to use.')
 @click.option('-v', '--verbose', default=False, is_flag=True)
 def stop(name, init_system, verbose):
@@ -455,7 +457,7 @@ def stop(name, init_system, verbose):
 @click.command()
 @click.argument('name')
 @click.option('--init-system', required=False,
-              type=click.Choice(Serv().implementations),
+              type=click.Choice(Serv().implementation_names),
               help='Init system to use.')
 @click.option('-v', '--verbose', default=False, is_flag=True)
 def start(name, init_system, verbose):
@@ -468,7 +470,7 @@ def start(name, init_system, verbose):
 @click.command()
 @click.argument('name')
 @click.option('--init-system', required=False,
-              type=click.Choice(Serv().implementations),
+              type=click.Choice(Serv().implementation_names),
               help='Init system to use.')
 @click.option('-v', '--verbose', default=False, is_flag=True)
 def restart(name, init_system, verbose):

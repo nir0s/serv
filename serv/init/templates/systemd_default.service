@@ -11,5 +11,25 @@ ExecStart={{ cmd }} {{ args }}
 Restart={{ always or 'restart' }}
 WorkingDirectory={{ chdir or '/' }}
 
+{% if nice %}
+LimitNICE={{ nice }}{% endif %}{% if limit_coredump %}
+LimitCORE={{ limit_coredump }}{% endif %}{% if limit_cputime %}
+LimitCPU={{ limit_cputime }}{% endif %}{% if limit_data %}
+LimitDATA={{ limit_data }}{% endif %}{% if limit_file_size %}
+LimitFSIZE={{ limit_file_size }}{% endif %}{% if limit_locked_memory %}
+LimitMEMLOCK={{ limit_locked_memory }}{% endif %}{% if limit_open_files %}
+LimitNOFILE={{ limit_open_files }}{% endif %}{% if limit_user_processes %}
+LimitNPROC={{ limit_user_processes }}{% endif %}{% if limit_physical_memory %}
+LimitRSS={{ limit_physical_memory }}{% endif %}{% if limit_stack_size %}
+LimitSTACK={{ limit_stack_size }}{% endif %}
+
+#Unsupported by Serv just yet
+#LimitAS=
+#LimitLOCKS=
+#LimitSIGPENDING=
+#LimitMSGQUEUE=
+#LimitRTPRIO=
+#LimitRTTIME=
+
 [Install]
 WantedBy=multi-user.target
