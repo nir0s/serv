@@ -238,10 +238,12 @@ The directory (`c:\nssm`) will be created for the user in case it doesn't exist.
 
 ```shell
 git clone git@github.com:nir0s/serv.git
-cd ld
+cd serv
 pip install tox
 tox
 ```
+
+Note that the `TestDeploy` tests will run according to which init system you have installed.
 
 ## Contributions..
 
