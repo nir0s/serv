@@ -1,5 +1,6 @@
 import os
 import sys
+import subprocess
 
 from serv import utils
 from serv.init.base import Base
@@ -42,7 +43,9 @@ class SysV(Base):
 
     def start(self):
         try:
-            sh.service(self.name, 'start', _bg=True)
+            subprocess.check_call(
+                'service {0} start'.format(self.name),
+                shell=True, stdout=subprocess.PIPE)
         except sh.CommandNotFound:
             # TODO: cleanup generated files if not found.
             self.lgr.warning('service command unavailable. Trying to run '
@@ -58,7 +61,9 @@ class SysV(Base):
 
     def stop(self):
         try:
-            sh.service(self.name, 'stop', _bg=True)
+            subprocess.check_call(
+                'service {0} stop'.format(self.name),
+                shell=True, stdout=subprocess.PIPE)
         except sh.CommandNotFound:
             self.lgr.warning('service command unavailable. Trying to run '
                              'script directly.')
@@ -67,7 +72,7 @@ class SysV(Base):
                 service.stop(_bg=True)
             except sh.CommandNotFound as ex:
                 self.lgr.error('Command not found: {0}'.format(str(ex)))
-                sys.exit()
+                sys.exit(1)
         except:
             self.lgr.info('Service already stopped.')
 
@@ -113,11 +118,12 @@ class SysV(Base):
             pid=pid
         )
 
-    def is_system_exists(self):
-        # maybe a safer way would be to check if /etc/init.d is not empty.
-        return os.path.isdir('/etc/init.d')
+    @staticmethod
+    def is_system_exists():
+        return is_system_exists()
 
-    def get_system_version(self):
+    @staticmethod
+    def get_system_version():
         return 'lsb-3.1'
 
     def is_service_exists(self):
@@ -156,4 +162,9 @@ class SysV(Base):
         if utils.IS_WIN or utils.IS_DARWIN:
             self.lgr.error(
                 'Cannot install SysVinit service on non-Linux systems.')
-            sys.exit()
+            sys.exit(1)
+
+
+def is_system_exists():
+    # TODO: maybe a safer way would be to check if /etc/init.d is not empty.
+    return os.path.isdir('/etc/init.d')

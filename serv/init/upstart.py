@@ -79,14 +79,12 @@ class Upstart(Base):
             pid=pid
         )
 
-    def is_system_exists(self):
-        try:
-            sh.initctl.version()
-            return True
-        except:
-            return False
+    @staticmethod
+    def is_system_exists():
+        return is_system_exists()
 
-    def get_system_version(self):
+    @staticmethod
+    def get_system_version():
         try:
             output = sh.initctl.version()
         except:
@@ -104,3 +102,11 @@ class Upstart(Base):
             self.lgr.error(
                 'Cannot install SysVinit service on non-Linux systems.')
             sys.exit()
+
+
+def is_system_exists():
+    try:
+        sh.initctl.version()
+        return True
+    except:
+        return False
