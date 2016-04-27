@@ -15,7 +15,6 @@ from serv import init
 
 
 def _invoke_click(func, args=None, opts=None):
-
     args = args or []
     opts = opts or {}
     opts_and_args = []
@@ -40,11 +39,9 @@ class TestGenerate(testtools.TestCase):
 
     def tearDown(self):
         super(TestGenerate, self).tearDown()
-        # TODO: ignore_errors?
-        try:
-            shutil.rmtree(os.path.dirname(self.init_script))
-        except:
-            pass
+        shutil.rmtree(
+            os.path.dirname(self.init_script),
+            ignore_errors=True)
 
     def _get_file_for_system(self, system):
         return os.path.join(
