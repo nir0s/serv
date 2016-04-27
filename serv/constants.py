@@ -16,26 +16,26 @@ TEMPLATES = {
     'systemd': {
         'default': {
             '.service': '/lib/systemd/system',
-            '': '/etc/sysconfig'
+            '': '/etc/sysconfig',
         }
     },
     'sysv': {
         'default': {
             '': '/etc/init.d',
-            '.defaults': '/etc/default'
+            '.defaults': '/etc/default',
         }
     },
     'upstart': {
         'default': {
-            '.conf': '/etc/init'
+            '.conf': '/etc/init',
         },
         '1.5': {
-            '.conf': '/etc/init'
+            '.conf': '/etc/init',
         }
     },
     'nssm': {
         'default': {
-            '.bat': 'c:\nssm'
+            '.bat': 'c:\nssm',
         }
     }
 }
@@ -44,32 +44,32 @@ DIST_TO_INITSYS = {
     'centos': {
         '5': ('sysv', 'lsb-3.1'),
         '6': ('upstart', '0.6.5'),
-        '7': ('systemd', 'default')
+        '7': ('systemd', 'default'),
     },
     'redhat': {
         '5': ('sysv', 'lsb-3.1'),
         '6': ('upstart', '0.6.5'),
-        '7': ('systemd', 'default')
+        '7': ('systemd', 'default'),
     },
     'rhel': {
         '5': ('sysv', 'lsb-3.1'),
         '6': ('upstart', '0.6.5'),
-        '7': ('systemd', 'default')
+        '7': ('systemd', 'default'),
     },
     'debian': {
         '6': ('sysv', 'lsb-3.1'),
         '7': ('sysv', 'lsb-3.1'),
-        '8': ('systemd', 'default')
+        '8': ('systemd', 'default'),
     },
     'fedora': {
         '18': ('systemd', 'default'),
         '19': ('systemd', 'default'),
         '20': ('systemd', 'default'),
-        '21': ('systemd', 'default')
+        '21': ('systemd', 'default'),
     },
     'opensuse': {
         '12': ('sysv', 'lsb-3.1'),
-        '13': ('systemd', 'default')
+        '13': ('systemd', 'default'),
     },
     'ubuntu': {
         '12': ('upstart', '1.5'),
@@ -77,9 +77,10 @@ DIST_TO_INITSYS = {
         '13': ('upstart', '1.5'),
         '13': ('upstart', '1.5'),
         '14': ('upstart', '1.5'),
-        '15': ('systemd', 'default')
+        '15': ('systemd', 'default'),
+        '16': ('systemd', 'default'),
     },
     'arch': {
-        'any': ('systemd', 'default')
+        'any': ('systemd', 'default'),
     }
 }

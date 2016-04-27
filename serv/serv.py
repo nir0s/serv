@@ -11,6 +11,7 @@ try:
 except ImportError:
     pass
 import click
+import ld
 
 from . import utils
 from . import logger
@@ -22,12 +23,11 @@ lgr = logger.init()
 
 
 class Serv(object):
-    def __init__(self, init_system=None, init_system_version=None,
+    def __init__(self,
+                 init_system=None,
+                 init_system_version=None,
                  verbose=False):
-        if verbose:
-            lgr.setLevel(logging.DEBUG)
-        else:
-            lgr.setLevel(logging.INFO)
+        lgr.setLevel(logging.DEBUG if verbose else logging.INFO)
 
         if not init_system or not init_system_version:
             result = self.lookup()
@@ -112,8 +112,14 @@ class Serv(object):
                  'name according to executable: {0}'.format(name))
         return name
 
-    def generate(self, cmd, name='', overwrite=False, deploy=False,
-                 start=False, **params):
+    def generate(
+            self,
+            cmd,
+            name='',
+            overwrite=False,
+            deploy=False,
+            start=False,
+            **params):
         """Generates service files and returns a list of the generated files.
 
         It will generate configuration file(s) for the service and
@@ -130,13 +136,11 @@ class Serv(object):
         # TODO: parsing env vars and setting the name should probably be under
         # `base.py`.
         name = name or self._set_service_name_from_command(cmd)
-        self.params.update(**params)
         self.params.update(dict(
             cmd=cmd,
             name=name,
-            env=self._parse_service_env_vars(params.get('var', '')))
-        )
-        self.params.pop('var')
+            env=self._parse_service_env_vars(params.pop('var', '')),
+            **params))
         self._verify_implementation_found()
         init = self.implementation(lgr=lgr, **self.params)
 
@@ -146,21 +150,21 @@ class Serv(object):
         for f in files:
             lgr.info('Generated {0}'.format(f))
 
-        if deploy:
-            init.validate_platform()
-            if not init.is_system_exists():
-                lgr.error('Cannot install service. {0} is not installed '
-                          'on this system.'.format(self.init_sys))
-                sys.exit(1)
-            lgr.info('Deploying {0} service {1}...'.format(
-                self.init_sys, name))
-            init.install()
+        if not deploy:
+            return files
+        init.validate_platform()
+        if not init.is_system_exists():
+            lgr.error('Cannot install service. {0} is not installed '
+                      'on this system.'.format(self.init_sys))
+            sys.exit(1)
+        lgr.info('Deploying {0} service {1}...'.format(self.init_sys, name))
+        init.install()
 
-            if start:
-                lgr.info('Starting {0} service {1}...'.format(
-                    self.init_sys, name))
-                init.start()
-            lgr.info('Service created.')
+        if start:
+            lgr.info('Starting {0} service {1}...'.format(
+                self.init_sys, name))
+            init.start()
+        lgr.info('Service created.')
         return files
 
     def remove(self, name):
@@ -219,7 +223,7 @@ class Serv(object):
         init.start()
 
     def _get_implementation(self, name):
-        self.params.update(dict(name=name))
+        self.params['name'] = name
         self._verify_implementation_found()
         return self.implementation(lgr=lgr, **self.params)
 
@@ -249,8 +253,7 @@ class Serv(object):
             lgr.debug('Lookup is not supported on OS X, Assuming Launchd.')
             return [('launchd', 'default')]
         lgr.debug('Looking up init method...')
-        return self._lookup_by_mapping() \
-            or self._init_sys_auto_lookup()
+        return self._lookup_by_mapping() or self._auto_lookup()
 
     # TODO: both this and _get_systemctl_version should be under their
     # corresponding implementations
@@ -260,7 +263,7 @@ class Serv(object):
         """
         try:
             output = sh.initctl.version()
-        except:
+        except NameError:
             return
         version = re.search(r'(\d+((.\d+)+)+?)', str(output))
         if version:
@@ -273,7 +276,7 @@ class Serv(object):
         """
         try:
             output = sh.systemctl('--version').split('\n')[0]
-        except:
+        except NameError:
             return
         version = re.search(r'(\d+)', str(output))
         if version:
@@ -291,7 +294,7 @@ class Serv(object):
         if os.path.isdir('/usr/lib/systemd'):
             version = self._get_systemctl_version()
             if version:
-                init_systems.append('systemd', version or 'default')
+                init_systems.append(('systemd', version or 'default'))
         if os.path.isdir('/usr/share/upstart'):
             version = self._get_upstart_version()
             if version:
@@ -332,151 +335,226 @@ class Serv(object):
 
 @click.group()
 def main():
-    pass
+    logger.configure()
 
 
 @click.command()
 @click.argument('cmd', required=True)
-@click.option('-n', '--name',
-              help='Name of service to create. If omitted, will be deducated '
-              'from the name of the executable.')
-@click.option('--description', default='no description given',
-              help='Service\'s description string.')
-@click.option('-d', '--deploy', default=False, is_flag=True,
-              help='Deploy the service on the current machine.')
-@click.option('-s', '--start', default=False, is_flag=True,
-              help='Start the service after deploying it.')
-@click.option('--init-system', required=False,
-              type=click.Choice(Serv().implementation_names),
-              help='Init system to use. (If omitted, will attempt to '
-              'automatically identify it.)')
-@click.option('--init-system-version', required=False, default='default',
-              type=click.Choice(['lsb-3.1', '1.5', 'default']),
-              help='Init system version to use. (If omitted, will attempt to '
-              'automatically identify it.)')
-@click.option('--overwrite', default=False, is_flag=True,
-              help='Whether to overwrite the service if it already exists.')
-@click.option('-a', '--args', required=False,
-              help='Arguments to pass to the command.')
-@click.option('-e', '--var', required=False, multiple=True,
-              help='Environment variables to pass to the command. '
-                   'Format: var=value. You can do this multiple times.')
-@click.option('-u', '--user', required=False, default='root',
-              help='User to execute `cmd` with. [Default: root]')
-@click.option('-g', '--group', required=False, default='root',
-              help='Group for `user`. [Default: root].')
-@click.option('--chroot', required=False, default='/',
-              help='chroot dir to use. [Default: /]')
-@click.option('--chdir', required=False, default='/',
-              help='Directory to change to before executing `cmd`. '
-              '[Default: /]')
-@click.option('--nice', required=False, type=click.IntRange(-20, 19),
-              help="process's `niceness` level. [-20 >< 19]"
-              )
+@click.option(
+    '-n', '--name',
+    help='Name of service to create. If omitted, will be deducated '
+         'from the name of the executable.')
+@click.option(
+    '--description',
+    default='no description given',
+    help='Service\'s description string.')
+@click.option(
+    '-d', '--deploy',
+    default=False,
+    is_flag=True,
+    help='Deploy the service on the current machine.')
+@click.option(
+    '-s', '--start',
+    default=False,
+    is_flag=True,
+    help='Start the service after deploying it.')
+@click.option(
+    '--init-system',
+    required=False,
+    type=click.Choice(Serv().implementation_names),
+    help='Init system to use. '
+         '(If omitted, will attempt to automatically identify it.)')
+@click.option(
+    '--init-system-version',
+    required=False,
+    default='default',
+    type=click.Choice(['lsb-3.1', '1.5', 'default']),
+    help='Init system version to use. '
+         '(If omitted, will attempt to automatically identify it.)')
+@click.option(
+    '--overwrite',
+    default=False,
+    is_flag=True,
+    help='Whether to overwrite the service if it already exists.')
+@click.option(
+    '-a', '--args',
+    required=False,
+    default='',
+    help='Arguments to pass to the command.')
+@click.option(
+    '-e', '--var',
+    required=False,
+    multiple=True,
+    help='Environment variables to pass to the command. '
+         'Format: var=value. You can do this multiple times.')
+@click.option(
+    '-u', '--user',
+    required=False,
+    default='root',
+    help='User to execute `cmd` with. [Default: root]')
+@click.option(
+    '-g', '--group',
+    required=False,
+    default='root',
+    help='Group for `user`. [Default: root].')
+@click.option(
+    '--chroot',
+    required=False,
+    default='/',
+    help='chroot dir to use. [Default: /]')
+@click.option(
+    '--chdir',
+    required=False,
+    default='/',
+    help='Directory to change to before executing `cmd`. [Default: /]')
+@click.option(
+    '--nice',
+    required=False,
+    type=click.IntRange(-20, 19),
+    help='process\'s `niceness` level. [-20 >< 19]')
 # TODO: add validation that valid umask.
-@click.option('--umask', required=False, type=int,
-              help="process's `niceness` level. [e.g. 755]"
-              )
-@click.option('--limit-coredump', required=False, default=None,
-              help="process's `limit-coredump` level. "
-              '[`ulimited` || > 0 ]')
-@click.option('--limit-cputime', required=False, default=None,
-              help="process's `limit-cputime` level. "
-              '[`ulimited` || > 0 ]')
-@click.option('--limit-data', required=False, default=None,
-              help="process's `limit-data` level. "
-              '[`ulimited` || > 0 ]')
-@click.option('--limit-file-size', required=False, default=None,
-              help="process's `limit-file-size` level. "
-              '[`ulimited` || > 0 ]')
-@click.option('--limit-locked-memory', required=False, default=None,
-              help="process's `limit-locked-memory` level. "
-              '[`ulimited` || > 0 ]')
-@click.option('--limit-open-files', required=False, default=None,
-              help="process's `limit-open-files` level. "
-              '[`ulimited` || > 0 ]')
-@click.option('--limit-user-processes', required=False, default=None,
-              help="process's `limit-user-processes` level. "
-              '[`ulimited` || > 0 ]')
-@click.option('--limit-physical-memory', required=False, default=None,
-              help="process's `limit-physical-memory` level. "
-              '[`ulimited` || > 0 ]')
-@click.option('--limit-stack-size', required=False, default=None,
-              help="process's `limit-stack-size` level. "
-              '[`ulimited` || > 0 ]')
-@click.option('-v', '--verbose', default=False, is_flag=True)
+@click.option(
+    '--umask',
+    required=False,
+    type=int,
+    help='process\'s `niceness` level. [e.g. 755]')
+@click.option(
+    '--limit-coredump',
+    required=False,
+    default=None,
+    help='process\'s `limit-coredump` level. [`ulimited` || > 0 ]')
+@click.option(
+    '--limit-cputime',
+    required=False,
+    default=None,
+    help='process\'s `limit-cputime` level. [`ulimited` || > 0 ]')
+@click.option(
+    '--limit-data',
+    required=False,
+    default=None,
+    help='process\'s `limit-data` level. [`ulimited` || > 0 ]')
+@click.option(
+    '--limit-file_size',
+    required=False,
+    default=None,
+    help='process\'s `limit-file-size` level. [`ulimited` || > 0 ]')
+@click.option(
+    '--limit-locked-memory',
+    required=False,
+    default=None,
+    help='process\'s `limit-locked-memory` level. [`ulimited` || > 0 ]')
+@click.option(
+    '--limit-open-files',
+    required=False,
+    default=None,
+    help='process\'s `limit-open-files` level. [`ulimited` || > 0 ]')
+@click.option(
+    '--limit-user-processes',
+    required=False,
+    default=None,
+    help='process\'s `limit-user-processes` level. [`ulimited` || > 0 ]')
+@click.option(
+    '--limit-physical-memory',
+    required=False,
+    default=None,
+    help='process\'s `limit-physical-memory` level. [`ulimited` || > 0 ]')
+@click.option(
+    '--limit-stack-size',
+    required=False,
+    default=None,
+    help='process\'s `limit-stack-size` level. [`ulimited` || > 0 ]')
+@click.option(
+    '-v', '--verbose',
+    default=False,
+    is_flag=True)
+# todo: I don't like this... maybe change so the args will be per init_system?
+@click.option(
+    '--supervisor-config',
+    required=False,
+    default='/etc/supervisord.conf',
+    type=str,
+    help='for supervisor init-system path to config file. '
+         '[default path is: /etc/supervisord.conf]')
 def generate(cmd, name, init_system, init_system_version, overwrite,
              deploy, start, verbose, **params):
     """Creates a service.
     """
-    logger.configure()
     Serv(init_system, init_system_version, verbose=verbose).generate(
         cmd, name, overwrite, deploy, start, **params)
 
 
 @click.command()
 @click.argument('name')
-@click.option('--init-system', required=False,
-              type=click.Choice(Serv().implementation_names),
-              help='Init system to use.')
-@click.option('-v', '--verbose', default=False, is_flag=True)
+@click.option(
+    '--init-system',
+    required=False,
+    type=click.Choice(Serv().implementation_names),
+    help='Init system to use.')
+@click.option(
+    '-v', '--verbose',
+    default=False,
+    is_flag=True)
 def remove(name, init_system, verbose):
     """Stops and Removes a service
     """
-    logger.configure()
     Serv(init_system, verbose=verbose).remove(name)
 
 
 @click.command()
 @click.argument('name', required=False)
-@click.option('--init-system', required=False,
-              type=click.Choice(Serv().implementation_names),
-              help='Init system to use.')
-@click.option('-v', '--verbose', default=False, is_flag=True)
+@click.option(
+    '--init-system',
+    required=False,
+    type=click.Choice(Serv().implementation_names),
+    help='Init system to use.')
+@click.option(
+    '-v', '--verbose',
+    default=False,
+    is_flag=True)
 def status(name, init_system, verbose):
     """WIP! Try at your own expense
     """
-    logger.configure()
     status = Serv(init_system, verbose=verbose).status(name)
     print(json.dumps(status, indent=4, sort_keys=True))
 
 
 @click.command()
 @click.argument('name')
-@click.option('--init-system', required=False,
-              type=click.Choice(Serv().implementation_names),
-              help='Init system to use.')
+@click.option(
+    '--init-system', required=False,
+    type=click.Choice(Serv().implementation_names),
+    help='Init system to use.')
 @click.option('-v', '--verbose', default=False, is_flag=True)
 def stop(name, init_system, verbose):
     """Stops a service
     """
-    logger.configure()
     Serv(init_system, verbose=verbose).stop(name)
 
 
 @click.command()
 @click.argument('name')
-@click.option('--init-system', required=False,
-              type=click.Choice(Serv().implementation_names),
-              help='Init system to use.')
+@click.option(
+    '--init-system', required=False,
+    type=click.Choice(Serv().implementation_names),
+    help='Init system to use.')
 @click.option('-v', '--verbose', default=False, is_flag=True)
 def start(name, init_system, verbose):
     """Starts a service
     """
-    logger.configure()
     Serv(init_system, verbose=verbose).start(name)
 
 
 @click.command()
 @click.argument('name')
-@click.option('--init-system', required=False,
-              type=click.Choice(Serv().implementation_names),
-              help='Init system to use.')
+@click.option(
+    '--init-system',
+    required=False,
+    type=click.Choice(Serv().implementation_names),
+    help='Init system to use.')
 @click.option('-v', '--verbose', default=False, is_flag=True)
 def restart(name, init_system, verbose):
     """Restarts a service
     """
-    logger.configure()
     Serv(init_system, verbose=verbose).restart(name)
 
 

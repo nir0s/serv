@@ -191,8 +191,8 @@ class Base(object):
         out of the box. For instance, `/etc/sysconfig` doesn't necessarily
         exist even if systemd is used by default.
         """
-        templates = pkgutil.get_data(__name__, os.path.join(
-            'templates', template))
+        templates = pkgutil.get_data(
+            __name__, os.path.join('templates', template))
 
         pretty_params = json.dumps(self.params, indent=4, sort_keys=True)
         self.lgr.debug('Rendering {0} with params: {1}...'.format(
