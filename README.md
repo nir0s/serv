@@ -2,6 +2,7 @@ Serv
 ====
 
 [![Build Status](https://travis-ci.org/nir0s/serv.svg?branch=master)](https://travis-ci.org/nir0s/serv)
+[![Build status](https://ci.appveyor.com/api/projects/status/v9uj7uwxq80d9u5n/branch/master?svg=true)](https://ci.appveyor.com/project/nir0s/serv/branch/master)
 [![PyPI](http://img.shields.io/pypi/dm/serv.svg)](http://img.shields.io/pypi/dm/serv.svg)
 [![PypI](http://img.shields.io/pypi/v/serv.svg)](http://img.shields.io/pypi/v/serv.svg)
 
