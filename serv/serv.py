@@ -15,7 +15,7 @@ from .init.base import Base
 
 lgr = logger.init()
 
-SUPPORTED_SYSTEMS = ['sysv', 'systemd', 'upstart']
+SUPPORTED_SYSTEMS = ['sysv', 'systemd', 'upstart', 'runit']
 
 PLATFORM = sys.platform
 IS_WIN = (os.name == 'nt')
@@ -170,10 +170,14 @@ class Serv(object):
         self._verify_implementation_found()
         init = self.implementation(lgr=lgr, **self.params)
 
-        lgr.info('Removing {0} service {1}...'.format(self.init_sys, name))
-        init.stop()
-        init.uninstall()
-        lgr.info('Service removed.')
+        if not init.is_service_exists():
+            lgr.info('Service {0} does not seem to be installed'.format(
+                    name))
+        else:
+            lgr.info('Removing {0} service {1}...'.format(self.init_sys, name))
+            init.stop()
+            init.uninstall()
+            lgr.info('Service removed.')
 
     def status(self, name=''):
         """Returns a list containing a single service's info if `name`

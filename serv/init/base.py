@@ -5,6 +5,7 @@ import sys
 from distutils.spawn import find_executable
 import tempfile
 import shutil
+import time
 
 import jinja2
 
@@ -21,6 +22,8 @@ class Base(object):
         self._set_default_parameter_values()
 
         self._validate_init_system_params()
+
+        self.overwrite = params.get('overwrite', False)
 
     def _set_default_parameter_values(self):
         p = self.params
@@ -58,11 +61,17 @@ class Base(object):
                 self.lgr.error('All limits must be greater than 0.')
                 self.exit()
 
+    @property
+    def tmp(self):
+        return tempfile.gettempdir()
+
+    @property
+    def templates(self):
+        return os.path.join(os.path.dirname(__file__), 'templates')
+
     def generate(self, overwrite):
         """Generates service files.
         """
-        self.tmp = tempfile.gettempdir()
-        self.tempaltes = os.path.join(os.path.dirname(__file__), 'templates')
         self.overwrite = overwrite
 
     def install(self):
@@ -172,3 +181,24 @@ class Base(object):
         self.lgr.info('Deploying {0} to {1}...'.format(source, destination))
         self._handle_service_directory(destination, create_directory)
         shutil.move(source, destination)
+
+    @staticmethod
+    def _execute_with_retry(func,
+                            func_args=None,
+                            func_kwargs=None,
+                            retries=3,
+                            gap=3):
+
+        while True:
+            func_kwargs = func_kwargs or {}
+            func_args = func_args or ()
+            try:
+                func(*func_args, **func_kwargs)
+            except:
+                if retries > 0:
+                    time.sleep(gap)
+                    retries -= 1
+                    continue
+                else:
+                    raise
+            break
