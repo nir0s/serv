@@ -1,25 +1,25 @@
 import os
-import re
-import sys
 
-from serv import utils
-from serv.init.base import Base
-from serv import constants as const
+from .. import utils
+from .. import constants
+from ..exceptions import ServError
+
+from .base import Base
 
 if not utils.IS_WIN:
     import sh
 
 
 class Upstart(Base):
-    def __init__(self, lgr=None, **params):
-        super(Upstart, self).__init__(lgr=lgr, **params)
+    def __init__(self, logger=None, **params):
+        super(Upstart, self).__init__(logger=logger, **params)
 
         if self.name:
             self.svc_file_dest = os.path.join(
-                const.UPSTART_SVC_PATH, self.name + '.conf')
+                constants.UPSTART_SVC_PATH, self.name + '.conf')
 
     def generate(self, overwrite=False):
-        """Generates a config file for an upstart service.
+        """Generate a config file for an upstart service.
         """
         super(Upstart, self).generate(overwrite=overwrite)
 
@@ -30,23 +30,23 @@ class Upstart(Base):
         return self.files
 
     def install(self):
-        """Enables the service"""
+        """Enable the service"""
         super(Upstart, self).install()
 
         self.deploy_service_file(self.svc_file_path, self.svc_file_dest)
 
     def start(self):
-        """Starts the service"""
+        """Start the service"""
         try:
             sh.start(self.name)
         except:
-            self.lgr.info('Service already started.')
+            self.logger.info('Service already started.')
 
     def stop(self):
         try:
             sh.stop(self.name)
         except:
-            self.lgr.info('Service already stopped.')
+            self.logger.info('Service already stopped.')
 
     def uninstall(self):
         if os.path.isfile(self.svc_file_dest):
@@ -83,25 +83,13 @@ class Upstart(Base):
     def is_system_exists():
         return is_system_exists()
 
-    @staticmethod
-    def get_system_version():
-        try:
-            output = sh.initctl.version()
-        except:
-            return
-        version = re.search(r'(\d+((.\d+)+)+?)', str(output))
-        if version:
-            return str(version.group())
-        return ''
-
     def is_service_exists(self):
         return os.path.isfile(self.svc_file_dest)
 
     def validate_platform(self):
         if utils.IS_WIN or utils.IS_DARWIN:
-            self.lgr.error(
-                'Cannot install SysVinit service on non-Linux systems.')
-            sys.exit()
+            raise ServError(
+                'Cannot install Upstart service on non-Linux systems.')
 
 
 def is_system_exists():

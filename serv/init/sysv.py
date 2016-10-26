@@ -1,24 +1,25 @@
 import os
-import sys
 import subprocess
 
-from serv import utils
-from serv.init.base import Base
-from serv import constants as const
+from .. import utils
+from .. import constants
+from ..exceptions import ServError
+
+from .base import Base
 
 if not utils.IS_WIN:
     import sh
 
 
 class SysV(Base):
-    def __init__(self, lgr=None, **params):
-        super(SysV, self).__init__(lgr=lgr, **params)
+    def __init__(self, logger=None, **params):
+        super(SysV, self).__init__(logger=logger, **params)
 
         if self.name:
             self.svc_file_dest = os.path.join(
-                const.SYSV_SVC_PATH, self.name)
+                constants.SYSV_SVC_PATH, self.name)
             self.env_file_dest = os.path.join(
-                const.SYSV_ENV_PATH, self.name + '.defaults')
+                constants.SYSV_ENV_PATH, self.name + '.defaults')
 
     def generate(self, overwrite=False):
         super(SysV, self).generate(overwrite=overwrite)
@@ -48,16 +49,15 @@ class SysV(Base):
                 shell=True, stdout=subprocess.PIPE)
         except sh.CommandNotFound:
             # TODO: cleanup generated files if not found.
-            self.lgr.warning('service command unavailable. Trying to run '
-                             'script directly.')
+            self.logger.warning(
+                'service command unavailable. Trying to run script directly.')
             try:
                 service = sh.Command('/etc/init.d/{0}'.format(self.name))
                 service.start(_bg=True)
             except sh.CommandNotFound as ex:
-                self.lgr.error('Comnand not found: {0}'.format(str(ex)))
-                sys.exit()
+                raise ServError('Comnand not found: {0}'.format(ex))
         except:
-            self.lgr.info('Service already started.')
+            self.logger.info('Service already started.')
 
     def stop(self):
         try:
@@ -65,16 +65,15 @@ class SysV(Base):
                 'service {0} stop'.format(self.name),
                 shell=True, stdout=subprocess.PIPE)
         except sh.CommandNotFound:
-            self.lgr.warning('service command unavailable. Trying to run '
-                             'script directly.')
+            self.logger.warning(
+                'service command unavailable. Trying to run script directly.')
             try:
                 service = sh.Command('/etc/init.d/{0}'.format(self.name))
                 service.stop(_bg=True)
             except sh.CommandNotFound as ex:
-                self.lgr.error('Command not found: {0}'.format(str(ex)))
-                sys.exit(1)
+                raise ServError('Command not found: {0}'.format(ex))
         except:
-            self.lgr.info('Service already stopped.')
+            self.logger.info('Service already stopped.')
 
     def uninstall(self):
         if os.path.isfile(self.svc_file_dest):
@@ -90,13 +89,12 @@ class SysV(Base):
         try:
             sh.service(name, 'status')
         except sh.CommandNotFound:
-            self.lgr.warning('service command unavailable. Trying to run '
-                             'script directly.')
+            self.logger.warning(
+                'service command unavailable. Trying to run script directly')
             try:
                 service = sh.Command('/etc/init.d/{0}'.format(self.name))
             except sh.CommandNotFound as ex:
-                self.lgr.error('Command not found: {0}'.format(str(ex)))
-                sys.exit()
+                raise ServError('Command not found: {0}'.format(ex))
         svc_info = self._parse_service_info(service.status())
         self.services['services'] = svc_info
         return self.services
@@ -121,10 +119,6 @@ class SysV(Base):
     @staticmethod
     def is_system_exists():
         return is_system_exists()
-
-    @staticmethod
-    def get_system_version():
-        return 'lsb-3.1'
 
     def is_service_exists(self):
         return os.path.isfile(self.svc_file_dest)
@@ -160,9 +154,8 @@ class SysV(Base):
 
     def validate_platform(self):
         if utils.IS_WIN or utils.IS_DARWIN:
-            self.lgr.error(
+            raise ServError(
                 'Cannot install SysVinit service on non-Linux systems.')
-            sys.exit(1)
 
 
 def is_system_exists():

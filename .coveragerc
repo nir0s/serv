@@ -1,3 +1,2 @@
 [run]
-omit = serv/six.py
-       serv/dictconfig.py
+omit = serv/tests/
