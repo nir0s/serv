@@ -3,7 +3,6 @@ import sys
 import json
 import shutil
 import pkgutil
-from distutils.spawn import find_executable
 
 import jinja2
 
@@ -13,7 +12,7 @@ from serv import constants as const
 
 class Base(object):
     def __init__(self, lgr=None, **params):
-        """Provides defaults for all other subclasses.
+        """Provide defaults for all other subclasses.
 
         This should always be supered.
 
@@ -81,7 +80,7 @@ class Base(object):
                     _raise_limit_error(limit_type, limit)
 
     def generate(self, overwrite):
-        """Generates service files.
+        """Generate service files.
 
         This exposes several comforts.
 
@@ -114,7 +113,7 @@ class Base(object):
         self.overwrite = overwrite
 
     def install(self):
-        """Installs a service on the local machine.
+        """Install a service on the local machine.
 
         This is relevant for init systems like systemd where you have to
         `sudo systemctl enable #SERVICE#` before starting a service.
@@ -122,30 +121,26 @@ class Base(object):
         When trying to install a service, if the executable for the command
         is not found, this will fail miserably.
         """
-        if not find_executable(self.cmd):
-            self.lgr.error('Executable {0} could not be found.'.format(
-                self.cmd))
-            sys.exit(1)
 
     def start(self):
-        """Starts a service.
+        """Start a service.
         """
         raise NotImplementedError('Must be implemented by a subclass')
 
     def stop(self):
-        """Stops a service.
+        """Stop a service.
         """
         raise NotImplementedError('Must be implemented by a subclass')
 
     def uninstall(self):
-        """Uninstalls a service.
+        """Uninstall a service.
 
         This should include any cleanups required.
         """
         raise NotImplementedError('Must be implemented by a subclass')
 
     def status(self, name=''):
-        """Retrieves the status of a service `name` or all services
+        """Retrieve the status of a service `name` or all services
         for the current init system.
         """
         self.services = dict(
@@ -155,25 +150,25 @@ class Base(object):
         )
 
     def is_system_exists(self):
-        """Returns True if the init system exists on the current machine
+        """Return True if the init system exists on the current machine
         or False if it doesn't.
         """
         raise NotImplementedError('Must be implemented by a subclass.')
 
     def is_service_exists(self):
-        """Returns True if the service is installed on the current machine
+        """Return True if the service is installed on the current machine
         and False if it isn't.
         """
         raise NotImplementedError('Must be implemented by a subclass.')
 
     def validate_platform(self):
-        """Validates that the platform the user is trying to install the
+        """Validate that the platform the user is trying to install the
         service on is valid.
         """
         raise NotImplementedError('Must be implemented by a subclass.')
 
     def generate_file_from_template(self, template, destination):
-        """Generates a file from a Jinja2 `template` and writes it to
+        """Generate a file from a Jinja2 `template` and writes it to
         `destination` using `params`.
 
         `overwrite` allows to overwrite existing files. It is passed to
