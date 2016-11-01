@@ -1,5 +1,4 @@
 import os
-import re
 import sys
 import json
 import time
@@ -7,99 +6,80 @@ import logging
 
 try:
     import distro
-    import sh
 except ImportError:
     pass
 import click
 
+from .init.sysv import SysV
+from .init.nssm import Nssm
+from .init.upstart import Upstart
+from .init.systemd import SystemD
+
 from . import utils
-from . import logger
-from .init.base import Base
-from . import constants as const
+from . import constants
+from .exceptions import ServError
 
 
-lgr = logger.init()
+def setup_logger():
+    handler = logging.StreamHandler(sys.stdout)
+    formatter = logging.Formatter('%(levelname)s - %(message)s')
+    handler.setFormatter(formatter)
+    logger = logging.getLogger(__name__)
+    logger.addHandler(handler)
+    logger.setLevel(logging.INFO)
+    return logger
+
+
+logger = setup_logger()
+
+
+INIT_SYSTEM_MAPPING = {
+    'sysv': SysV,
+    'systemd': SystemD,
+    'upstart': Upstart,
+    'nssm': Nssm
+}
 
 
 class Serv(object):
-    def __init__(self, init_system=None, init_system_version=None,
+    def __init__(self,
+                 init_system=None,
                  verbose=False):
-        if verbose:
-            lgr.setLevel(logging.DEBUG)
-        else:
-            lgr.setLevel(logging.INFO)
-
-        if not init_system or not init_system_version:
-            result = self.lookup()
-        self.init_sys = init_system or result[0][0]
-        self.init_sys_ver = init_system_version or result[0][1]
+        logger.setLevel(logging.DEBUG if verbose else logging.INFO)
 
         if not init_system:
-            lgr.debug('Autodetected init system: {0}'.format(
-                self.init_sys))
-        if not init_system_version:
-            lgr.debug('Autodetected init system version: {0}'.format(
-                self.init_sys_ver))
+            result = self.lookup_init_systems()
+            if not result:
+                raise ServError(
+                    'No init system detected. Please open an issue at '
+                    'https://github.com/nir0s/serv/issues')
+            logger.debug('Autodetected init systems: %s', result)
+        self.init_system = init_system or result[0]
 
-        # params to be used when manipulating a service.
-        # this is updated in each scenario.
-        self.params = dict(
-            init_sys=self.init_sys, init_sys_ver=self.init_sys_ver)
+        # Params to be used when manipulating a service.
+        # this is updated with each scenario.
+        self.params = dict(init_sys=self.init_system)
 
-        # all implementation objects
-        implementations = self._find_all_implementations()
-        self.implementation_names = \
-            [implementation.__name__.lower() for implementation in
-             implementations if implementation.__name__.lower() != 'base']
+        if self.init_system not in INIT_SYSTEM_MAPPING.keys():
+            raise ServError(
+                'Init system {0} not supported. Please open an issue at '
+                'https://github.com/nir0s/serv/issues'.format(
+                    self.init_system))
 
-        if self.init_sys not in self.implementation_names:
-            lgr.error('init system {0} not supported'.format(self.init_sys))
-            sys.exit(1)
-        # a class object which can be instantiated to control
-        # a service.
-        # this is instantiated with the relevant parameters (self.params)
-        # in each scenario.
-        self.implementation = self._get_init_system(implementations)
-
-    def _get_init_system(self, init_systems):
-        for system in init_systems:
-            if system.__name__.lower() == self.init_sys:
-                return system
-
-    def _find_all_implementations(self):
-        """Returns an init system implementation based on the
-        manual mapping or automated lookup.
-
-        All implementations must be loaded within `init/__init__.py`.
-        The implementations are retrieved by looking at all subclasses
-        of `Base`. A list of all implementations inheriting from Base
-        is returned.
-        """
-        init_systems = []
-
-        def get_implemenetations(inherit_from):
-            init_systems.append(inherit_from)
-            subclasses = inherit_from.__subclasses__()
-            if subclasses:
-                for subclass in subclasses:
-                    get_implemenetations(subclass)
-
-        get_implemenetations(Base)
-        return init_systems
+        self.implementation = INIT_SYSTEM_MAPPING[self.init_system]
 
     def _parse_service_env_vars(self, env_vars):
-        """Returns a dict based on `key=value` pair strings.
-
-        Yeah yeah.. it's less performant.. splitting twice.. who cares.
+        """Return a dict based on `key=value` pair strings.
         """
         env = {}
         for var in env_vars:
+            # Yeah yeah.. it's less performant.. splitting twice.. who cares.
             k, v = var.split('=')
             env.update({k: v})
         return env
 
     def _set_service_name_from_command(self, cmd):
-        """Sets the name of a service according to the command.
+        """Set the name of a service according to the command.
 
         This is only relevant if the name wasn't explicitly provided.
         Note that this is risky as it sets the name according to the
@@ -107,14 +87,22 @@ class Serv(object):
         use the same binary, even if their args are different, they
         will be named the same.
         """
+        # TODO: Consider assign incremental integers to the name if a service
+        # with the same name already exists.
         name = os.path.basename(cmd)
-        lgr.info('Service name not supplied. Assigning '
-                 'name according to executable: {0}'.format(name))
+        logger.info(
+            'Service name not supplied. Assigning name according to '
+            'executable: %s', name)
         return name
 
-    def generate(self, cmd, name='', overwrite=False, deploy=False,
-                 start=False, **params):
-        """Generates service files and returns a list of the generated files.
+    def generate(self,
+                 cmd,
+                 name='',
+                 overwrite=False,
+                 deploy=False,
+                 start=False,
+                 **params):
+        """Generate service files and returns a list of the generated files.
 
         It will generate configuration file(s) for the service and
         deploy them to the tmp dir on your os.
@@ -123,10 +111,6 @@ class Serv(object):
         current machine.
         If `start` is True, the service will be started as well.
         """
-        if start and not deploy:
-            lgr.error('Cannot start a service without deploying it.')
-            sys.exit(1)
-
         # TODO: parsing env vars and setting the name should probably be under
         # `base.py`.
         name = name or self._set_service_name_from_command(cmd)
@@ -136,35 +120,32 @@ class Serv(object):
             name=name,
             env=self._parse_service_env_vars(params.get('var', '')))
         )
-        self.params.pop('var')
-        self._verify_implementation_found()
-        init = self.implementation(lgr=lgr, **self.params)
+        if 'var' in params:
+            self.params.pop('var')
+        init = self.implementation(logger=logger, **self.params)
 
-        lgr.info('Generating {0} files for service {1}...'.format(
-            self.init_sys, name))
+        logger.info(
+            'Generating %s files for service %s...',
+            self.init_system, name)
         files = init.generate(overwrite=overwrite)
         for f in files:
-            lgr.info('Generated {0}'.format(f))
+            logger.info('Generated %s', f)
 
-        if deploy:
+        if deploy or start:
             init.validate_platform()
-            if not init.is_system_exists():
-                lgr.error('Cannot install service. {0} is not installed '
-                          'on this system.'.format(self.init_sys))
-                sys.exit(1)
-            lgr.info('Deploying {0} service {1}...'.format(
-                self.init_sys, name))
+            logger.info('Deploying %s service %s...', self.init_system, name)
             init.install()
 
             if start:
-                lgr.info('Starting {0} service {1}...'.format(
-                    self.init_sys, name))
+                logger.info(
+                    'Starting %s service %s...',
+                    self.init_system, name)
                 init.start()
-            lgr.info('Service created.')
+            logger.info('Service created')
         return files
 
     def remove(self, name):
-        """Removes a service completely.
+        """Remove a service completely.
 
         It will try to stop the service and then uninstall it.
         The implementation is, of course, system specific.
@@ -172,70 +153,65 @@ class Serv(object):
         delete /etc/init/<name>.conf.
         """
         init = self._get_implementation(name)
-        self._verify_service_installed(init, name)
-        lgr.info('Removing {0} service {1}...'.format(self.init_sys, name))
+        self._assert_service_installed(init, name)
+        logger.info('Removing %s service %s...', self.init_system, name)
         init.stop()
         init.uninstall()
-        if not init.is_service_exists():
-            lgr.info('Service removed.')
-        else:
-            lgr.error('Failed to remove main service file for some reason.')
+        logger.info('Service removed')
 
     def status(self, name=''):
-        """Returns a list containing a single service's info if `name`
+        """Return a list containing a single service's info if `name`
         is supplied, else returns a list of all services' info.
         """
-        lgr.warn('Note that `status` is currently not so robust and may '
-                 'break on different systems.')
+        logger.warn(
+            'Note that `status` is currently not so robust and may break on '
+            'different systems')
         init = self._get_implementation(name)
         if name:
-            self._verify_service_installed(init, name)
-        lgr.info('Retrieving status...'.format(name))
+            self._assert_service_installed(init, name)
+        logger.info('Retrieving status...'.format(name))
         return init.status(name)
 
     def stop(self, name):
-        """Stops a service"""
+        """Stop a service
+        """
         init = self._get_implementation(name)
-        self._verify_service_installed(init, name)
-        lgr.info('Stopping service: {0}...'.format(name))
+        self._assert_service_installed(init, name)
+        logger.info('Stopping service: %s...', name)
         init.stop()
 
     def start(self, name):
-        """Starts a service"""
+        """Start a service
+        """
         init = self._get_implementation(name)
-        self._verify_service_installed(init, name)
-        lgr.info('Starting service: {0}...'.format(name))
+        self._assert_service_installed(init, name)
+        logger.info('Starting service: %s...', name)
         init.start()
 
     def restart(self, name):
-        """Restarts a service"""
+        """Restart a service
+        """
         init = self._get_implementation(name)
-        self._verify_service_installed(init, name)
-        lgr.info('Restarting service: {0}...'.format(name))
+        self._assert_service_installed(init, name)
+        logger.info('Restarting service: %s...', name)
         init.stop()
         # Here we would use status to verify that the service stopped
         # before restarting. If only status was stable. eh..
+        # The arbitrarity of this sleep time is making me sick...
         time.sleep(3)
         init.start()
 
     def _get_implementation(self, name):
         self.params.update(dict(name=name))
-        self._verify_implementation_found()
-        return self.implementation(lgr=lgr, **self.params)
+        return self.implementation(logger=logger, **self.params)
 
-    def _verify_service_installed(self, init, name):
+    @staticmethod
+    def _assert_service_installed(init, name):
         if not init.is_service_exists():
-            lgr.info('Service {0} does not seem to be installed'.format(
-                name))
-            sys.exit(1)
+            raise ServError('Service %s does not seem to be installed', name)
 
-    def _verify_implementation_found(self):
-        if not self.implementation:
-            lgr.error('No init system implementation could be found.')
-            sys.exit(1)
-
-    def lookup(self):
-        """Returns the relevant init system and its version.
+    def lookup_init_systems(self):
+        """Return the relevant init system and its version.
 
         This will try to look at the mapping first. If the mapping
         doesn't exist, it will try to identify it automatically.
@@ -243,67 +219,46 @@ class Serv(object):
         Windows lookup is not supported and `nssm` is assumed.
         """
         if utils.IS_WIN:
-            lgr.debug('Lookup is not supported on Windows. Assuming nssm.')
-            return [('nssm', 'default')]
+            logger.debug(
+                'Lookup is not supported on Windows. Assuming nssm...')
+            return ['nssm']
         if utils.IS_DARWIN:
-            lgr.debug('Lookup is not supported on OS X, Assuming Launchd.')
-            return [('launchd', 'default')]
-        lgr.debug('Looking up init method...')
+            logger.debug(
+                'Lookup is not supported on OS X, Assuming launchd...')
+            return ['launchd']
+
+        logger.debug('Looking up init method...')
         return self._lookup_by_mapping() \
             or self._init_sys_auto_lookup()
 
-    # TODO: both this and _get_systemctl_version should be under their
-    # corresponding implementations
-    @staticmethod
-    def _get_upstart_version():
-        """Returns upstart's version if it exists.
-        """
-        try:
-            output = sh.initctl.version()
-        except:
-            return
-        version = re.search(r'(\d+((.\d+)+)+?)', str(output))
-        if version:
-            return str(version.group())
-        return None
-
-    @staticmethod
-    def _get_systemctl_version():
-        """Returns systemctl's version if it exists.
-        """
-        try:
-            output = sh.systemctl('--version').split('\n')[0]
-        except:
-            return
-        version = re.search(r'(\d+)', str(output))
-        if version:
-            return str(version.group())
-        return None
+    def _is_init_system_installed(self, path):
+        return os.path.isdir(path)
 
     def _init_sys_auto_lookup(self):
-        """Returns a list of tuples of available init systems on the
+        """Return a list of tuples of available init systems on the
         current machine.
 
         Note that in some situations (Ubuntu 14.04 for instance) more than
         one init system can be found.
         """
+        # TODO: Instead, check for executables for systemd and upstart
+        # systemctl for systemd and initctl for upstart.
+        # An alternative might be to check the second answer here:
+        # http://unix.stackexchange.com/questions/196166/how-to-find-out-if-a-system-uses-sysv-upstart-or-systemd-initsystem
+        # TODO: Move to each system's implementation
         init_systems = []
-        if os.path.isdir('/usr/lib/systemd'):
-            version = self._get_systemctl_version()
-            if version:
-                init_systems.append('systemd', version or 'default')
-        if os.path.isdir('/usr/share/upstart'):
-            version = self._get_upstart_version()
-            if version:
-                init_systems.append('upstart', version or 'default')
-        if os.path.isdir('/etc/init.d'):
-            init_systems.append('sysv', 'lsb-3.1')
+        if self._is_init_system_installed('/usr/lib/systemd'):
+            init_systems.append('systemd')
+        if self._is_init_system_installed('/usr/share/upstart'):
+            init_systems.append('upstart')
+        if self._is_init_system_installed('/etc/init.d'):
+            init_systems.append('sysv')
         return init_systems
 
     @staticmethod
     def _lookup_by_mapping():
-        """Returns a tuple containing the init system's type and version based
-        on a constant mapping of distribution+version to init system..
+        """Return a the init system based on a constant mapping of
+        distribution+version to init system..
 
         See constants.py for the mapping.
         A failover of the version is proposed for when no version is supplied.
@@ -319,170 +274,204 @@ class Serv(object):
         like = distro.like().lower()
         distribution_id = distro.id().lower()
         version = distro.major_version()
-        # init (upstart 1.12.1)
-        if distribution_id in ('arch'):
+        if 'arch' in (distribution_id, like):
             version = 'any'
-        if like in ('arch'):
-            version = 'any'
-        init_sys = const.DIST_TO_INITSYS.get(
-            distribution_id, const.DIST_TO_INITSYS.get(like))
+        init_sys = constants.DIST_TO_INITSYS.get(
+            distribution_id, constants.DIST_TO_INITSYS.get(like))
         if init_sys:
-            return [init_sys.get(version)] or []
+            system = init_sys.get(version)
+            return [system] if system else []
+
+
+init_system_option = click.option(
+    '--init-system',
+    required=False,
+    type=click.Choice(INIT_SYSTEM_MAPPING.keys()),
+    help='Init system to use. (If omitted, will attempt to automatically '
+         'identify it.)')
+verbosity_option = click.option('-v', '--verbose', default=False, is_flag=True)
 
 
 @click.group()
 def main():
-    pass
+    """Create, remove and manage services on different platforms using a single
+    API
+    """
 
 
-@click.command()
-@click.argument('cmd', required=True)
-@click.option('-n', '--name',
+@main.command()
+@click.argument('COMMAND')
+@click.option('-n',
+              '--name',
               help='Name of service to create. If omitted, will be deducated '
-              'from the name of the executable.')
-@click.option('--description', default='no description given',
-              help='Service\'s description string.')
-@click.option('-d', '--deploy', default=False, is_flag=True,
-              help='Deploy the service on the current machine.')
-@click.option('-s', '--start', default=False, is_flag=True,
-              help='Start the service after deploying it.')
-@click.option('--init-system', required=False,
-              type=click.Choice(Serv().implementation_names),
-              help='Init system to use. (If omitted, will attempt to '
-              'automatically identify it.)')
-@click.option('--init-system-version', required=False, default='default',
-              type=click.Choice(['lsb-3.1', '1.5', 'default']),
-              help='Init system version to use. (If omitted, will attempt to '
-              'automatically identify it.)')
-@click.option('--overwrite', default=False, is_flag=True,
-              help='Whether to overwrite the service if it already exists.')
-@click.option('-a', '--args', required=False,
-              help='Arguments to pass to the command.')
-@click.option('-e', '--var', required=False, multiple=True,
+                   'from the name of the executable')
+@click.option('--description',
+              default='no description given',
+              help='Service\'s description string')
+@click.option('-d',
+              '--deploy',
+              default=False,
+              is_flag=True,
+              help='Deploy the service on the current machine')
+@click.option('-s',
+              '--start',
+              default=False,
+              is_flag=True,
+              help='Start the service after deploying it')
+@click.option('--overwrite',
+              default=False,
+              is_flag=True,
+              help='Whether to overwrite the service if it already exists')
+@click.option('-a',
+              '--args',
+              help='Arguments to pass to the command')
+@click.option('-e',
+              '--var',
+              multiple=True,
               help='Environment variables to pass to the command. '
-                   'Format: var=value. You can do this multiple times.')
-@click.option('-u', '--user', required=False, default='root',
+                   'Format: var=value. You can do this multiple times')
+@click.option('-u',
+              '--user',
+              default='root',
               help='User to execute `cmd` with. [Default: root]')
-@click.option('-g', '--group', required=False, default='root',
-              help='Group for `user`. [Default: root].')
-@click.option('--chroot', required=False, default='/',
+@click.option('-g',
+              '--group',
+              default='root',
+              help='Group for `user`. [Default: root]')
+@click.option('--chroot',
+              default='/',
               help='chroot dir to use. [Default: /]')
-@click.option('--chdir', required=False, default='/',
+@click.option('--chdir',
+              default='/',
               help='Directory to change to before executing `cmd`. '
-              '[Default: /]')
-@click.option('--nice', required=False, type=click.IntRange(-20, 19),
-              help="process's `niceness` level. [-20 >< 19]"
-              )
+                   '[Default: /]')
+@click.option('--nice',
+              type=click.IntRange(-20, 19),
+              help="process's `niceness` level. [-20 >< 19]")
 # TODO: add validation that valid umask.
-@click.option('--umask', required=False, type=int,
-              help="process's `niceness` level. [e.g. 755]"
-              )
-@click.option('--limit-coredump', required=False, default=None,
+@click.option('--umask',
+              type=int,
+              help="process's `niceness` level. [e.g. 755]")
+@click.option('--limit-coredump',
+              default=None,
               help="process's `limit-coredump` level. "
-              '[`ulimited` || > 0 ]')
-@click.option('--limit-cputime', required=False, default=None,
+                   '[`ulimited` || > 0 ]')
+@click.option('--limit-cputime',
+              default=None,
               help="process's `limit-cputime` level. "
-              '[`ulimited` || > 0 ]')
-@click.option('--limit-data', required=False, default=None,
+                   '[`ulimited` || > 0 ]')
+@click.option('--limit-data',
+              default=None,
               help="process's `limit-data` level. "
-              '[`ulimited` || > 0 ]')
-@click.option('--limit-file-size', required=False, default=None,
+                   '[`ulimited` || > 0 ]')
+@click.option('--limit-file-size',
+              default=None,
               help="process's `limit-file-size` level. "
-              '[`ulimited` || > 0 ]')
-@click.option('--limit-locked-memory', required=False, default=None,
+                   '[`ulimited` || > 0 ]')
+@click.option('--limit-locked-memory',
+              default=None,
               help="process's `limit-locked-memory` level. "
-              '[`ulimited` || > 0 ]')
-@click.option('--limit-open-files', required=False, default=None,
+                   '[`ulimited` || > 0 ]')
+@click.option('--limit-open-files',
+              default=None,
               help="process's `limit-open-files` level. "
-              '[`ulimited` || > 0 ]')
-@click.option('--limit-user-processes', required=False, default=None,
+                   '[`ulimited` || > 0 ]')
+@click.option('--limit-user-processes',
+              default=None,
               help="process's `limit-user-processes` level. "
-              '[`ulimited` || > 0 ]')
-@click.option('--limit-physical-memory', required=False, default=None,
+                   '[`ulimited` || > 0 ]')
+@click.option('--limit-physical-memory',
+              default=None,
               help="process's `limit-physical-memory` level. "
-              '[`ulimited` || > 0 ]')
-@click.option('--limit-stack-size', required=False, default=None,
+                   '[`ulimited` || > 0 ]')
+@click.option('--limit-stack-size',
+              default=None,
               help="process's `limit-stack-size` level. "
-              '[`ulimited` || > 0 ]')
-@click.option('-v', '--verbose', default=False, is_flag=True)
-def generate(cmd, name, init_system, init_system_version, overwrite,
-             deploy, start, verbose, **params):
-    """Creates a service.
+                   '[`ulimited` || > 0 ]')
+@init_system_option
+@verbosity_option
+def generate(command,
+             name,
+             init_system,
+             overwrite,
+             deploy,
+             start,
+             verbose,
+             **params):
+    """Create a service.
+
+    `COMMAND` is the path to the executable to run
     """
-    logger.configure()
-    Serv(init_system, init_system_version, verbose=verbose).generate(
-        cmd, name, overwrite, deploy, start, **params)
+    # TODO: Add a `prefix` flag which can be used to prefix
+    # `COMMAND` with `su -c`, etc..
+    try:
+        Serv(init_system, verbose=verbose).generate(
+            command, name, overwrite, deploy, start, **params)
+    except ServError as ex:
+        sys.exit(ex)
 
 
-@click.command()
+@main.command()
 @click.argument('name')
-@click.option('--init-system', required=False,
-              type=click.Choice(Serv().implementation_names),
-              help='Init system to use.')
-@click.option('-v', '--verbose', default=False, is_flag=True)
+@init_system_option
+@verbosity_option
 def remove(name, init_system, verbose):
-    """Stops and Removes a service
+    """Stop and Removes a service
     """
-    logger.configure()
-    Serv(init_system, verbose=verbose).remove(name)
+    try:
+        Serv(init_system, verbose=verbose).remove(name)
+    except ServError as ex:
+        sys.exit(ex)
 
 
-@click.command()
+@main.command()
 @click.argument('name', required=False)
-@click.option('--init-system', required=False,
-              type=click.Choice(Serv().implementation_names),
-              help='Init system to use.')
-@click.option('-v', '--verbose', default=False, is_flag=True)
+@init_system_option
+@verbosity_option
 def status(name, init_system, verbose):
     """WIP! Try at your own expense
     """
-    logger.configure()
-    status = Serv(init_system, verbose=verbose).status(name)
-    print(json.dumps(status, indent=4, sort_keys=True))
+    try:
+        status = Serv(init_system, verbose=verbose).status(name)
+    except ServError as ex:
+        sys.exit(ex)
+    click.echo(json.dumps(status, indent=4, sort_keys=True))
 
 
-@click.command()
+@main.command()
 @click.argument('name')
-@click.option('--init-system', required=False,
-              type=click.Choice(Serv().implementation_names),
-              help='Init system to use.')
-@click.option('-v', '--verbose', default=False, is_flag=True)
+@init_system_option
+@verbosity_option
 def stop(name, init_system, verbose):
-    """Stops a service
+    """Stop a service
     """
-    logger.configure()
-    Serv(init_system, verbose=verbose).stop(name)
+    try:
+        Serv(init_system, verbose=verbose).stop(name)
+    except ServError as ex:
+        sys.exit(ex)
 
 
-@click.command()
+@main.command()
 @click.argument('name')
-@click.option('--init-system', required=False,
-              type=click.Choice(Serv().implementation_names),
-              help='Init system to use.')
-@click.option('-v', '--verbose', default=False, is_flag=True)
+@init_system_option
+@verbosity_option
 def start(name, init_system, verbose):
-    """Starts a service
+    """Start a service
     """
-    logger.configure()
-    Serv(init_system, verbose=verbose).start(name)
+    try:
+        Serv(init_system, verbose=verbose).start(name)
+    except ServError as ex:
+        sys.exit(ex)
 
 
-@click.command()
+@main.command()
 @click.argument('name')
-@click.option('--init-system', required=False,
-              type=click.Choice(Serv().implementation_names),
-              help='Init system to use.')
-@click.option('-v', '--verbose', default=False, is_flag=True)
+@init_system_option
+@verbosity_option
 def restart(name, init_system, verbose):
-    """Restarts a service
+    """Restart a service
     """
-    logger.configure()
-    Serv(init_system, verbose=verbose).restart(name)
-
-
-main.add_command(generate)
-main.add_command(remove)
-main.add_command(status)
-main.add_command(stop)
-main.add_command(start)
-main.add_command(restart)
+    try:
+        Serv(init_system, verbose=verbose).restart(name)
+    except ServError as ex:
+        sys.exit(ex)

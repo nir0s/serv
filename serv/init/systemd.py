@@ -1,18 +1,18 @@
 import os
-import re
-import sys
 
-from serv import utils
-from serv.init.base import Base
-from serv import constants as const
+from .. import utils
+from .. import constants
+from ..exceptions import ServError
+
+from .base import Base
 
 if not utils.IS_WIN:
     import sh
 
 
 class SystemD(Base):
-    def __init__(self, lgr=None, **params):
-        """Sets the default parameters.
+    def __init__(self, logger=None, **params):
+        """Set the default parameters.
 
         We're supering this as `Base` is setting up some basic
         globally required parameters. It's a must.
@@ -24,16 +24,16 @@ class SystemD(Base):
 
         `self.name` is set in `base.py`
         """
-        super(SystemD, self).__init__(lgr=lgr, **params)
+        super(SystemD, self).__init__(logger=logger, **params)
 
         if self.name:
             self.svc_file_dest = os.path.join(
-                const.SYSTEMD_SVC_PATH, self.name + '.service')
+                constants.SYSTEMD_SVC_PATH, self.name + '.service')
             self.env_file_dest = os.path.join(
-                const.SYSTEMD_ENV_PATH, self.name)
+                constants.SYSTEMD_ENV_PATH, self.name)
 
     def generate(self, overwrite=False):
-        """Generates service files and returns a list of them.
+        """Generate service files and returns a list of them.
 
         Note that env var names will be capitalized using a Jinja filter.
         This is template dependent.
@@ -70,7 +70,7 @@ class SystemD(Base):
         return self.files
 
     def install(self):
-        """Installs the service on the local machine
+        """Install the service on the local machine
 
         This is where we deploy the service files to their relevant
         locations and perform any other required actions to configure
@@ -84,22 +84,22 @@ class SystemD(Base):
         sh.systemctl('daemon-reload')
 
     def start(self):
-        """Starts the service.
+        """Start the service.
         """
         sh.systemctl.start(self.name)
 
     def stop(self):
-        """Stops the service.
+        """Stop the service.
         """
         try:
             sh.systemctl.stop(self.name)
         except sh.ErrorReturnCode_5:
-            self.lgr.debug('Service not running.')
+            self.logger.debug('Service not running.')
 
     # TODO: this should be a decorator under base.py to allow
     # cleanup on failed creation.
     def uninstall(self):
-        """Uninstalls the service.
+        """Uninstall the service.
 
         This is supposed to perform any cleanup operations required to
         remove the service. Files, links, whatever else should be removed.
@@ -114,7 +114,7 @@ class SystemD(Base):
             os.remove(self.env_file_dest)
 
     def status(self, name=''):
-        """Returns a list of the statuses of the `name` service, or
+        """Return a list of the statuses of the `name` service, or
         if name is omitted, a list of the status of all services for this
         specific init system.
 
@@ -147,37 +147,23 @@ class SystemD(Base):
 
     @staticmethod
     def is_system_exists():
-        """Returns True if the init system exists and False if not.
+        """Return True if the init system exists and False if not.
         """
         return is_system_exists()
-
-    @staticmethod
-    def get_system_version():
-        """Returns the init system's version if it exists.
-        """
-        try:
-            output = sh.systemctl('--version').split('\n')[0]
-        except:
-            return
-        version = re.search(r'(\d+)', str(output))
-        if version:
-            return str(version.group())
-        return ''
 
     def is_service_exists(self):
         return os.path.isfile(self.svc_file_dest)
 
     def _validate_init_system_specific_params(self):
         if not self.cmd.startswith('/'):
-            self.lgr.error('Systemd requires the full path to the executable. '
-                           'Instead, you provided: {0}'.format(self.cmd))
-            sys.exit()
+            raise ServError(
+                'Systemd requires the full path to the executable. Instead, '
+                'you provided: {0}'.format(self.cmd))
 
     def validate_platform(self):
         if utils.IS_WIN or utils.IS_DARWIN:
-            self.lgr.error(
-                'Cannot install SysVinit service on non-Linux systems.')
-            sys.exit()
+            raise ServError(
+                'Cannot install SystemD service on non-Linux systems.')
 
 
 def is_system_exists():

@@ -2,25 +2,28 @@ import os
 import sys
 import shutil
 
-from serv import utils
-from serv.init.base import Base
-from serv import constants as const
+from .. import utils
+from .. import constants
+from ..exceptions import ServError
+
+from .base import Base
 
 
 RUNNING_STATES = ['SERVICE_RUNNING', 'SERVICE_STOP_PENDING']
 
 
 class Nssm(Base):
-    def __init__(self, lgr=None, **params):
-        super(Nssm, self).__init__(lgr=lgr, **params)
-        # raise NotImplementedError('nssm is not ready yet. Come back soon...')
+    def __init__(self, logger=None, **params):
+        super(Nssm, self).__init__(logger=logger, **params)
+
         if self.name:
             self.svc_file_dest = os.path.join(
-                const.NSSM_SVC_PATH, self.name + '.bat')
-        self.nssm_exe = os.path.join(const.NSSM_BINARY_PATH, 'nssm.exe')
+                constants.NSSM_SVC_PATH, self.name + '.bat')
+        self.nssm_exe = os.path.join(constants.NSSM_BINARY_PATH, 'nssm.exe')
 
     def generate(self, overwrite=False):
         super(Nssm, self).generate(overwrite=overwrite)
+
         self._set_init_system_specific_params()
 
         svc_file_template = self.template_prefix + '.bat'
@@ -65,7 +68,7 @@ class Nssm(Base):
         return self.services
 
     def is_system_exists(self):
-        """Returns True always since if it isn't installed, it will be.
+        """Return True always since if it isn't installed, it will be.
 
         See `self.install`
         """
@@ -81,29 +84,30 @@ class Nssm(Base):
         return utils.run('{0} {1} {2}'.format(self.nssm_exe, cmd, self.name))
 
     def _deploy_nssm_binary(self):
-        # still not sure whether we should use this or
+        # Still not sure whether we should use this or
         # is_pyx32 = True if struct.calcsize("P") == 4 else False
         # TODO: check what checks for OS arch and which checks Python arch.
         is_64bits = sys.maxsize > 2 ** 32
         binary = 'nssm64.exe' if is_64bits else 'nssm32.exe'
         source = os.path.join(os.path.dirname(__file__), 'binaries', binary)
-        if not os.path.isdir(const.NSSM_BINARY_PATH):
-            os.makedirs(const.NSSM_BINARY_PATH)
-        self.lgr.debug('Deploying {0} to {1}...'.format(source, self.nssm_exe))
+        if not os.path.isdir(constants.NSSM_BINARY_PATH):
+            os.makedirs(constants.NSSM_BINARY_PATH)
+        self.logger.debug('Deploying {0} to {1}...'.format(
+            source, self.nssm_exe))
         shutil.copyfile(source, self.nssm_exe)
+        # TODO: Remove, unnecessary
         return self.nssm_exe
 
     def _set_init_system_specific_params(self):
-        # should of course be configurable
+        # Should of course be configurable
         self.params.update({
             'startup_policy': 'auto',
             'failure_reset_timeout': 60,
             'failure_restart_delay': 5000,
-            'nssm_dir': const.NSSM_BINARY_PATH
+            'nssm_dir': constants.NSSM_BINARY_PATH
         })
 
     def validate_platform(self):
         if not utils.IS_WIN:
-            self.lgr.error(
+            raise ServError(
                 'Cannot install nssm service on non-Windows systems.')
-            sys.exit()
