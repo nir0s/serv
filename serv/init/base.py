@@ -45,9 +45,7 @@ class Base(object):
 
     def _validate_service_params(self):
         niceness = self.params.get('nice')
-        # print('AAAAAAA : {0}'.format(niceness))
         if niceness is not None and (niceness < -20 or niceness > 19):
-            # print('PARAMS : {0}'.format(self.params))
             raise ServError('`niceness` level must be between -20 and 19')
 
         limit_params = [
@@ -189,12 +187,11 @@ class Base(object):
             'templates', template)))
 
         pretty_params = json.dumps(self.params, indent=4, sort_keys=True)
-        self.logger.debug('Rendering {0} with params: {1}...'.format(
-            template, pretty_params))
+        self.logger.debug(
+            'Rendering %s with params: %s...', template, pretty_params)
         generated = jinja2.Environment().from_string(
             templates).render(self.params)
-        self.logger.debug('Writing generated file to {0}...'.format(
-            destination))
+        self.logger.debug('Writing generated file to %s...', destination)
         self._should_overwrite(destination)
         with open(destination, 'w') as f:
             f.write(generated)
@@ -205,7 +202,7 @@ class Base(object):
         # on service creation/installation.
         if os.path.isfile(destination):
             if self.overwrite:
-                self.logger.debug('Overwriting: {0}'.format(destination))
+                self.logger.debug('Overwriting: %s', destination)
             else:
                 raise ServError('File already exists: {0}'.format(
                     destination))
@@ -214,7 +211,7 @@ class Base(object):
         dirname = os.path.dirname(init_system_file)
         if not os.path.isdir(dirname):
             if create_directory:
-                self.logger.debug('Creating directory {0}...'.format(dirname))
+                self.logger.debug('Creating directory %s...', dirname)
                 os.makedirs(dirname)
             else:
                 raise ServError(
@@ -224,5 +221,5 @@ class Base(object):
     def deploy_service_file(self, source, destination, create_directory=False):
         self._should_overwrite(destination)
         self._handle_service_directory(destination, create_directory)
-        self.logger.info('Deploying {0} to {1}...'.format(source, destination))
+        self.logger.info('Deploying %s to %s...', source, destination)
         shutil.move(source, destination)

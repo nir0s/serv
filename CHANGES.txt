@@ -1,0 +1,18 @@
+**0.3.0 (2016-11-22)**
+
+* Add support for Python 3
+* Remove support for different versions of different init systems. This seems like a redundant feature considering the the only difference is between Upstart versions (1 vs. 1.5 etc..) and that becomes irrelevant soon.
+* Fix niceness limits check (never performed the check at all)
+* Fix bug where if no environment variables are provided using the API, Serv would crash.
+* Fix a bug where, in some situations, Serv will fail if it couldn't identify a supported init system.
+* Fix a bug where serv will not fallback to auto-detection if it couldn't find a supported distribution in the static map.
+* Show tracebacks if using Serv directly from Python (as opposed to when using the CLI).
+* Replaced auto-detection of supported init system implementations with a static one to simplify things. There's really no need for such a complex mechanism.
+* Updated to distro v1.0.1
+* Updated click to v6.6
+* Use pytest for tests instead of nose
+* Add codecov.io coverage reports
+* Add requires.io requirements monitoring
+* Add landscape.io code health monitoring
+* Added classifiers to setup.py
+* Added setup.cfg for wheel release

@@ -92,8 +92,7 @@ class Nssm(Base):
         source = os.path.join(os.path.dirname(__file__), 'binaries', binary)
         if not os.path.isdir(constants.NSSM_BINARY_PATH):
             os.makedirs(constants.NSSM_BINARY_PATH)
-        self.logger.debug('Deploying {0} to {1}...'.format(
-            source, self.nssm_exe))
+        self.logger.debug('Deploying %s to %s...', source, self.nssm_exe)
         shutil.copyfile(source, self.nssm_exe)
         # TODO: Remove, unnecessary
         return self.nssm_exe

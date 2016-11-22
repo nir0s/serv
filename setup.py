@@ -10,7 +10,7 @@ def read(*parts):
 
 
 def _get_package_data():
-    """Iterates over the `init` dir for directories and returns
+    """Iterate over the `init` dir for directories and returns
     all files within them.
 
     Only files within `binaries` and `templates` will be added.
@@ -32,7 +32,7 @@ install_requires = [
 if not IS_WIN:
     non_win_requirements = [
         "sh==1.11",
-        "distro==1.0.0",
+        "distro==1.0.1",
     ]
     install_requires.extend(non_win_requirements)
 
@@ -44,7 +44,7 @@ setup(
     author_email='nir36g@gmail.com',
     license='LICENSE',
     platforms='All',
-    description='Init system abstraction API and CLI.',
+    description='Init system abstraction API and CLI',
     long_description=read('README.rst'),
     packages=find_packages(exclude=[]),
     package_data={'serv': _get_package_data()},
