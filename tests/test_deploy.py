@@ -67,24 +67,24 @@ class TestDeployReal:
                 utils.get_tmp_dir(system, self.service_name),
                 ignore_errors=True)
 
-    @pytest.mark.skipif(utils.IS_WIN, reason='Irrelevant on Windows')
     @pytest.mark.skipif(
         not init.systemd.is_system_exists(),
         reason='Systemd not found on this system.')
+    @pytest.mark.skipif(utils.IS_WIN, reason='Irrelevant on Windows')
     def test_systemd(self):
         self._test_deploy_remove('systemd')
 
-    @pytest.mark.skipif(utils.IS_WIN, reason='Irrelevant on Windows')
     @pytest.mark.skipif(
         not init.upstart.is_system_exists(),
         reason='Upstart not found on this system.')
+    @pytest.mark.skipif(utils.IS_WIN, reason='Irrelevant on Windows')
     def test_upstart(self):
         self._test_deploy_remove('upstart')
 
-    @pytest.mark.skipif(utils.IS_WIN, reason='Irrelevant on Windows')
     @pytest.mark.skipif(
         not init.sysv.is_system_exists(),
         reason='SysV not found on this system.')
+    @pytest.mark.skipif(utils.IS_WIN, reason='Irrelevant on Windows')
     def test_sysv(self):
         self._test_deploy_remove('sysv')
 
