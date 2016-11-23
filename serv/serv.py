@@ -169,7 +169,7 @@ class Serv(object):
         init = self._get_implementation(name)
         if name:
             self._assert_service_installed(init, name)
-        logger.info('Retrieving status...'.format(name))
+        logger.info('Retrieving status...')
         return init.status(name)
 
     def stop(self, name):

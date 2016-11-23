@@ -55,7 +55,7 @@ class SysV(Base):
                 service = sh.Command('/etc/init.d/{0}'.format(self.name))
                 service.start(_bg=True)
             except sh.CommandNotFound as ex:
-                raise ServError('Comnand not found: {0}'.format(ex))
+                raise ServError('Command not found: {0}'.format(ex))
         except:
             self.logger.info('Service already started.')
 
@@ -84,37 +84,6 @@ class SysV(Base):
     def status(self, name=''):
         """WIP!"""
         raise NotImplementedError()
-
-        super(SysV, self).status(name=name)
-        try:
-            sh.service(name, 'status')
-        except sh.CommandNotFound:
-            self.logger.warning(
-                'service command unavailable. Trying to run script directly')
-            try:
-                service = sh.Command('/etc/init.d/{0}'.format(self.name))
-            except sh.CommandNotFound as ex:
-                raise ServError('Command not found: {0}'.format(ex))
-        svc_info = self._parse_service_info(service.status())
-        self.services['services'] = svc_info
-        return self.services
-
-    @staticmethod
-    def _parse_service_info(svc):
-        # ssh start/running, process 1214
-        s = svc.split()
-        name = s[0]
-        last_action, status = s[1].split('/')
-        try:
-            pid = s[2].split()[1]
-        except:
-            pid = ''
-        return dict(
-            name=name,
-            last_action=last_action,
-            status=status,
-            pid=pid
-        )
 
     @staticmethod
     def is_system_exists():

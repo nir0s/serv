@@ -53,31 +53,7 @@ class Upstart(Base):
             os.remove(self.svc_file_dest)
 
     def status(self, name=''):
-        super(Upstart, self).status(name=name)
-
-        svc_list = sh.initctl.list()
-        svcs_info = [self._parse_service_info(svc) for svc in svc_list]
-        if name:
-            # return list of one item for specific service
-            svcs_info = [s for s in svcs_info if s['name'] == name]
-        self.services['services'] = svcs_info
-        return self.services
-
-    @staticmethod
-    def _parse_service_info(svc):
-        s = svc.split()
-        name = s[0]
-        last_action, status = s[1].split('/')
-        try:
-            pid = s[2].split()[1]
-        except:
-            pid = ''
-        return dict(
-            name=name,
-            last_action=last_action,
-            status=status,
-            pid=pid
-        )
+        raise NotImplementedError()
 
     @staticmethod
     def is_system_exists():
@@ -96,5 +72,5 @@ def is_system_exists():
     try:
         sh.initctl.version()
         return True
-    except:
+    except sh.CommandNotFound:
         return False

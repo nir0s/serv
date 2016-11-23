@@ -170,5 +170,5 @@ def is_system_exists():
     try:
         sh.systemctl('--version')
         return True
-    except:
+    except sh.CommandNotFound:
         return False

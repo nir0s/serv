@@ -136,7 +136,7 @@ class Base(object):
         """
         # raise NotImplementedError('Must be implemented by a subclass')
 
-    def status(self, name=''):
+    def status(self, **kwargs):
         """Retrieve the status of a service `name` or all services
         for the current init system.
         """
