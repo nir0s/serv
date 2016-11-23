@@ -208,7 +208,8 @@ class Serv(object):
     @staticmethod
     def _assert_service_installed(init, name):
         if not init.is_service_exists():
-            raise ServError('Service %s does not seem to be installed', name)
+            raise ServError('Service {0} does not seem to be installed'.format(
+                name))
 
     def lookup_init_systems(self):
         """Return the relevant init system and its version.
