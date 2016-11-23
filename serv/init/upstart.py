@@ -70,7 +70,10 @@ class Upstart(Base):
 
 def is_system_exists():
     try:
-        sh.initctl.version()
-        return True
-    except sh.CommandNotFound:
+        try:
+            sh.initctl.version()
+            return True
+        except sh.CommandNotFound:
+            return False
+    except NameError:
         return False

@@ -168,7 +168,10 @@ class SystemD(Base):
 
 def is_system_exists():
     try:
-        sh.systemctl('--version')
-        return True
-    except sh.CommandNotFound:
+        try:
+            sh.systemctl('--version')
+            return True
+        except sh.CommandNotFound:
+            return False
+    except NameError:
         return False
