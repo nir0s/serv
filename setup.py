@@ -27,7 +27,7 @@ def _get_package_data():
 IS_WIN = (os.name == 'nt')
 install_requires = [
     "click==6.6",
-    "jinja2==2.8"
+    "jinja2==2.11.3"
 ]
 if not IS_WIN:
     non_win_requirements = [
